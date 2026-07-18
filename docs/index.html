@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>診所照片與檢驗報告歸檔系統｜平安聯合診所 內部說明</title>
+<meta name="description" content="平安聯合診所內部說明：照片與檢驗報告自動歸檔系統。同仁只要做三件事；資料的整理與儲存全在診所內、不上雲端。">
+<style>
+/* ===== 必用 CSS（原樣嵌入，勿改）===== */
+:root{--bg:#faf9f5;--card:#ffffff;--tp:#1f1e1b;--ts2:#68675f;--ln:#8a8a86;--bd:#e3e1d9;
+--f:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+--fm:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1b17;--card:#282722;--tp:#f0efea;--ts2:#a5a49e;--bd:#3a3934}}
+svg text.t{font:400 14px var(--f);fill:var(--tp)}
+svg text.ts{font:400 12px var(--f);fill:var(--ts2)}
+svg text.th{font:500 14px var(--f);fill:var(--tp)}
+svg .arr{stroke:var(--ln);stroke-width:1.5;fill:none}
+svg .c-gray>rect{fill:#F1EFE8;stroke:#5F5E5A;stroke-width:.5}
+svg .c-gray>text.th{fill:#444441}svg .c-gray>text.ts{fill:#5F5E5A}
+svg .c-purple>rect{fill:#EEEDFE;stroke:#534AB7;stroke-width:.5}
+svg .c-purple>text.th{fill:#3C3489}svg .c-purple>text.ts{fill:#534AB7}
+svg .c-teal>rect{fill:#E1F5EE;stroke:#0F6E56;stroke-width:.5}
+svg .c-teal>text.th{fill:#085041}svg .c-teal>text.ts{fill:#0F6E56}
+svg .c-amber>rect{fill:#FAEEDA;stroke:#854F0B;stroke-width:.5}
+svg .c-amber>text.th{fill:#633806}svg .c-amber>text.ts{fill:#854F0B}
+@media (prefers-color-scheme:dark){
+svg .c-gray>rect{fill:#444441;stroke:#B4B2A9}svg .c-gray>text.th{fill:#F1EFE8}svg .c-gray>text.ts{fill:#D3D1C7}
+svg .c-purple>rect{fill:#3C3489;stroke:#AFA9EC}svg .c-purple>text.th{fill:#CECBF6}svg .c-purple>text.ts{fill:#AFA9EC}
+svg .c-teal>rect{fill:#085041;stroke:#5DCAA5}svg .c-teal>text.th{fill:#9FE1CB}svg .c-teal>text.ts{fill:#5DCAA5}
+svg .c-amber>rect{fill:#633806;stroke:#EF9F27}svg .c-amber>text.th{fill:#FAC775}svg .c-amber>text.ts{fill:#EF9F27}}
+
+/* ===== 版面（自訂）===== */
+:root{--accent:#534AB7;--accent-bg:#EEEDFE;--accent-bd:#cfcbf3;
+--amber-line:#854F0B;--amber-tp:#633806;--maxw:760px;--radius:14px}
+@media (prefers-color-scheme:dark){:root{--accent:#AFA9EC;--accent-bg:#332c66;--accent-bd:#453c86;
+--amber-line:#EF9F27;--amber-tp:#FAC775}}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--tp);font-family:var(--f);
+font-size:16px;line-height:1.75;-webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 18px 72px}
+a{color:var(--accent)}
+b{font-weight:600}
+.mono{font-family:var(--fm)}
+section[id],header[id]{scroll-margin-top:16px}
+
+/* Hero */
+.hero{padding:44px 0 6px;border-bottom:1px solid var(--bd);margin-bottom:6px}
+.badge{display:inline-block;font-size:13px;color:var(--accent);background:var(--accent-bg);
+border:1px solid var(--accent-bd);padding:4px 13px;border-radius:999px;font-weight:600}
+.hero h1{font-size:29px;line-height:1.3;margin:16px 0 12px;font-weight:600;letter-spacing:.01em}
+.hero .lead{font-size:17px;margin:0 0 8px}
+.hero .sub{font-size:14.5px;color:var(--ts2);margin:8px 0 0}
+
+/* TOC */
+.toc{background:var(--card);border:1px solid var(--bd);border-radius:var(--radius);padding:14px 18px;margin:22px 0 4px}
+.toc-title{font-size:13px;color:var(--ts2);margin:0 0 8px;font-weight:600;letter-spacing:.02em}
+.toc ol{margin:0;padding-left:22px}
+.toc li{margin:4px 0}
+.toc a{color:var(--tp);text-decoration:none}
+.toc a:hover{color:var(--accent);text-decoration:underline}
+@media(min-width:560px){.toc ol{columns:2;column-gap:26px}}
+
+/* Sections */
+section{padding:30px 0;border-bottom:1px solid var(--bd)}
+section:last-of-type{border-bottom:0}
+h2{font-size:21px;font-weight:600;margin:0 0 14px;line-height:1.35;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h2 .idx{font-family:var(--fm);font-size:14px;color:var(--accent);background:var(--accent-bg);
+border:1px solid var(--accent-bd);border-radius:8px;padding:1px 9px;font-weight:600}
+h3{font-size:16px;font-weight:600;margin:20px 0 6px}
+p{margin:12px 0}
+
+/* Generic card / callout */
+.card{background:var(--card);border:1px solid var(--bd);border-radius:var(--radius);padding:16px 18px;margin:14px 0}
+
+/* Pain points / generic stacked items */
+.stack{display:grid;gap:12px;margin:16px 0}
+.item{background:var(--card);border:1px solid var(--bd);border-radius:var(--radius);padding:15px 17px}
+.item h3{margin:0 0 4px;font-size:16px}
+.item p{margin:0;color:var(--ts2);font-size:15px}
+
+/* Bulleted explanation list */
+.bullets{list-style:none;padding:0;margin:16px 0;display:grid;gap:11px}
+.bullets li{padding-left:22px;position:relative;font-size:15.5px}
+.bullets li::before{content:"";position:absolute;left:3px;top:12px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+
+/* Checklist (privacy) */
+.checklist{list-style:none;padding:0;margin:16px 0;display:grid;gap:11px}
+.checklist li{padding-left:28px;position:relative;font-size:15.5px}
+.checklist li::before{content:"✓";position:absolute;left:2px;top:0;color:var(--accent);font-weight:700}
+
+/* Numbered steps */
+.steps{list-style:none;counter-reset:step;padding:0;margin:18px 0;display:grid;gap:12px}
+.steps li{position:relative;background:var(--card);border:1px solid var(--bd);border-radius:var(--radius);padding:15px 17px 15px 58px;counter-increment:step}
+.steps li::before{content:counter(step);position:absolute;left:15px;top:14px;width:29px;height:29px;border-radius:50%;
+background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-bd);font-weight:700;
+display:flex;align-items:center;justify-content:center;font-size:15px}
+.steps li h3{margin:0 0 4px;font-size:16px}
+.steps li p{margin:0;color:var(--ts2);font-size:15px}
+
+/* Mnemonic */
+.mnemonic{background:var(--accent-bg);border:1px solid var(--accent-bd);color:var(--accent);
+border-radius:var(--radius);padding:18px 20px;margin:16px 0;text-align:center;font-size:19px;font-weight:600;letter-spacing:.04em}
+
+/* SVG scroll container */
+.svg-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--card);
+border:1px solid var(--bd);border-radius:var(--radius);padding:14px;margin:16px 0}
+.svg-scroll svg{display:block;min-width:680px;width:100%;height:auto}
+.fig-cap{font-size:13px;color:var(--ts2);margin:8px 4px 0;text-align:center;line-height:1.6}
+
+/* Tables */
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:14px 0}
+table{border-collapse:collapse;width:100%;min-width:460px;font-size:15px}
+th,td{border:1px solid var(--bd);padding:11px 13px;text-align:left;vertical-align:top}
+th{background:var(--accent-bg);color:var(--tp);font-weight:600}
+tbody td:first-child{font-weight:600;width:34%}
+
+/* Phases */
+.phases{display:grid;gap:12px;margin:16px 0}
+.phase{background:var(--card);border:1px solid var(--bd);border-radius:var(--radius);padding:14px 16px;
+display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start}
+.phase .tag{font-family:var(--fm);font-weight:700;color:var(--accent);background:var(--accent-bg);
+border:1px solid var(--accent-bd);border-radius:8px;padding:2px 11px;font-size:14px}
+.phase p{margin:0;font-size:15px}
+
+/* Honest limits */
+.limit{background:var(--card);border:1px solid var(--bd);border-left:4px solid var(--amber-line);
+border-radius:var(--radius);padding:14px 17px}
+.limit h3{margin:0 0 5px;font-size:16px;color:var(--amber-tp)}
+.limit p{margin:0;color:var(--tp);font-size:15px}
+
+/* FAQ */
+.faq{display:grid;gap:10px;margin:16px 0}
+details{background:var(--card);border:1px solid var(--bd);border-radius:var(--radius);overflow:hidden}
+summary{cursor:pointer;padding:14px 42px 14px 16px;font-weight:600;font-size:15.5px;list-style:none;position:relative}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"＋";position:absolute;right:16px;top:14px;color:var(--accent);font-weight:600}
+details[open] summary::after{content:"－"}
+details .a{padding:0 16px 15px;color:var(--ts2);font-size:15px}
+
+/* Footer */
+footer{padding:30px 0 0;color:var(--ts2);font-size:14px;line-height:1.7}
+footer .row{margin:6px 0}
+footer a{color:var(--accent);word-break:break-all}
+.note{font-size:13px;color:var(--ts2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero" id="top">
+    <span class="badge">平安聯合診所 · 內部說明</span>
+    <h1>診所照片與檢驗報告歸檔系統</h1>
+    <p class="lead">同一位病人的照片和檢驗報告，自動收進同一個資料夾——所有整理、儲存、查閱都在診所內完成，不上任何雲端。</p>
+    <p class="sub">這一頁寫給診所同仁看：系統要解決什麼、你只要做什麼、它守住哪些隱私底線。不用懂技術也能讀完。</p>
+
+    <nav class="toc" aria-label="章節導覽">
+      <p class="toc-title">這頁有什麼</p>
+      <ol>
+        <li><a href="#why">為什麼要做這個系統</a></li>
+        <li><a href="#how">系統怎麼運作</a></li>
+        <li><a href="#dothree">同仁只要做三件事</a></li>
+        <li><a href="#photo">拍照協定：N0</a></li>
+        <li><a href="#archive">歸檔長什麼樣</a></li>
+        <li><a href="#privacy">安全與隱私</a></li>
+        <li><a href="#phases">分階段推出</a></li>
+        <li><a href="#limits">誠實說清楚的限制</a></li>
+        <li><a href="#faq">常見問題</a></li>
+      </ol>
+    </nav>
+  </header>
+
+  <section id="why">
+    <h2><span class="idx">01</span>為什麼要做這個系統</h2>
+    <p>現在病人的照片和報告散在很多地方，要找一份資料常常得翻半天。這個系統想解決三個痛點：</p>
+    <div class="stack">
+      <div class="item">
+        <h3>照片散在各自的手機裡</h3>
+        <p>傷口、病灶的照片拍在不同同仁的手機，要找一張得一支一支手機翻；照片留在私人手機，也有外洩風險。</p>
+      </div>
+      <div class="item">
+        <h3>LINE 上的報告會過期、會消失</h3>
+        <p>檢驗所把報告傳到 LINE，訊息往上滑就找不到；LINE 上的影像還有保存期限，過期就不見了。</p>
+      </div>
+      <div class="item">
+        <h3>同一位病人的紀錄拼不起來</h3>
+        <p>照片在手機、報告在 LINE、基本資料在 HIS（診所看診系統），同一個人的東西散在三處，看診時兜不起來。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <h2><span class="idx">02</span>系統怎麼運作</h2>
+    <p>你不用背這張圖，只要抓大方向：資料從上面進來，中間自動整理，下面就能依病人、依時間查閱。</p>
+    <div class="svg-scroll">
+      <svg width="100%" viewBox="0 0 680 690" role="img" aria-label="系統總架構圖"><defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<g class="c-gray"><rect x="40" y="50" width="130" height="56" rx="4"/><text class="th" x="105" y="70" text-anchor="middle" dominant-baseline="central">同仁手機拍照</text><text class="ts" x="105" y="88" text-anchor="middle" dominant-baseline="central">N0 錨定協定</text></g>
+<g class="c-gray"><rect x="190" y="50" width="130" height="56" rx="4"/><text class="th" x="255" y="70" text-anchor="middle" dominant-baseline="central">檢驗所報告</text><text class="ts" x="255" y="88" text-anchor="middle" dominant-baseline="central">LINE 影像傳入</text></g>
+<g class="c-gray"><rect x="340" y="50" width="130" height="56" rx="4" stroke-dasharray="5 3"/><text class="th" x="405" y="70" text-anchor="middle" dominant-baseline="central">自動接收</text><text class="ts" x="405" y="88" text-anchor="middle" dominant-baseline="central">LINE OA webhook</text></g>
+<g class="c-gray"><rect x="490" y="50" width="130" height="56" rx="4" stroke-dasharray="5 3"/><text class="th" x="555" y="70" text-anchor="middle" dominant-baseline="central">歷史資料回溯</text><text class="ts" x="555" y="88" text-anchor="middle" dominant-baseline="central">影像・PDF・CSV</text></g>
+<line class="arr" x1="105" y1="106" x2="105" y2="136" marker-end="url(#arrow)"/>
+<line class="arr" x1="255" y1="106" x2="255" y2="136" marker-end="url(#arrow)"/>
+<line class="arr" x1="405" y1="106" x2="405" y2="136" marker-end="url(#arrow)"/>
+<line class="arr" x1="555" y1="106" x2="555" y2="136" marker-end="url(#arrow)"/>
+<g class="c-gray"><rect x="40" y="140" width="170" height="56" rx="4"/><text class="th" x="125" y="160" text-anchor="middle" dominant-baseline="central">ClinicSnap</text><text class="ts" x="125" y="178" text-anchor="middle" dominant-baseline="central">批次上傳・卡片辨識</text></g>
+<g class="c-gray"><rect x="230" y="140" width="390" height="56" rx="4"/><text class="th" x="425" y="160" text-anchor="middle" dominant-baseline="central">inbox 收件夾</text><text class="ts" x="425" y="178" text-anchor="middle" dominant-baseline="central">v0 人工拖入・v1 webhook 自動</text></g>
+<line class="arr" x1="125" y1="196" x2="125" y2="236" marker-end="url(#arrow)"/>
+<line class="arr" x1="425" y1="196" x2="425" y2="236" marker-end="url(#arrow)"/>
+<rect x="40" y="240" width="600" height="204" rx="8" fill="none" stroke="var(--ln)" stroke-width="0.5" stroke-dasharray="6 4"/>
+<text class="th" x="56" y="262" text-anchor="start" dominant-baseline="central">整合層（自建・單一伺服器執行）</text>
+<g class="c-purple"><rect x="56" y="280" width="170" height="56" rx="4"/><text class="th" x="141" y="300" text-anchor="middle" dominant-baseline="central">內容解析</text><text class="ts" x="141" y="318" text-anchor="middle" dominant-baseline="central">OCR・PDF 文字層</text></g>
+<g class="c-purple"><rect x="255" y="280" width="170" height="56" rx="4"/><text class="th" x="340" y="300" text-anchor="middle" dominant-baseline="central">身份解析</text><text class="ts" x="340" y="318" text-anchor="middle" dominant-baseline="central">身分證號＝主鍵</text></g>
+<g class="c-purple"><rect x="454" y="280" width="170" height="56" rx="4"/><text class="th" x="539" y="300" text-anchor="middle" dominant-baseline="central">自動分類</text><text class="ts" x="539" y="318" text-anchor="middle" dominant-baseline="central">來源＋關鍵字規則</text></g>
+<line class="arr" x1="226" y1="308" x2="250" y2="308" marker-end="url(#arrow)"/>
+<line class="arr" x1="425" y1="308" x2="449" y2="308" marker-end="url(#arrow)"/>
+<g class="c-gray"><rect x="56" y="372" width="170" height="56" rx="4" stroke-dasharray="5 3"/><text class="th" x="141" y="392" text-anchor="middle" dominant-baseline="central">HIS 病歷號（選配）</text><text class="ts" x="141" y="410" text-anchor="middle" dominant-baseline="central">可日後回填別名</text></g>
+<path class="arr" d="M141 372 V354 H340 V340" fill="none" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+<g class="c-purple"><rect x="454" y="372" width="170" height="56" rx="4"/><text class="th" x="539" y="392" text-anchor="middle" dominant-baseline="central">歸檔判準閘門</text><text class="ts" x="539" y="410" text-anchor="middle" dominant-baseline="central">恰一＋已建檔＋核對</text></g>
+<line class="arr" x1="539" y1="336" x2="539" y2="368" marker-end="url(#arrow)"/>
+<line class="arr" x1="539" y1="428" x2="539" y2="480" marker-end="url(#arrow)"/>
+<path class="arr" d="M470 428 V456 H161 V480" fill="none" marker-end="url(#arrow)"/>
+<g class="c-teal"><rect x="56" y="484" width="210" height="56" rx="4"/><text class="th" x="161" y="504" text-anchor="middle" dominant-baseline="central">archive\{證號}\</text><text class="ts" x="161" y="522" text-anchor="middle" dominant-baseline="central">SQLite 索引＋稽核 log</text></g>
+<g class="c-amber"><rect x="430" y="484" width="190" height="56" rx="4"/><text class="th" x="525" y="504" text-anchor="middle" dominant-baseline="central">待確認佇列</text><text class="ts" x="525" y="522" text-anchor="middle" dominant-baseline="central">人工裁決後歸檔</text></g>
+<line x1="161" y1="540" x2="161" y2="558" stroke="var(--ln)" stroke-width="0.5"/>
+<line x1="105" y1="558" x2="555" y2="558" stroke="var(--ln)" stroke-width="0.5"/>
+<line class="arr" x1="105" y1="558" x2="105" y2="576" marker-end="url(#arrow)"/>
+<line class="arr" x1="255" y1="558" x2="255" y2="576" marker-end="url(#arrow)"/>
+<line class="arr" x1="405" y1="558" x2="405" y2="576" marker-end="url(#arrow)"/>
+<line class="arr" x1="555" y1="558" x2="555" y2="576" marker-end="url(#arrow)"/>
+<g class="c-teal"><rect x="40" y="580" width="130" height="56" rx="4"/><text class="th" x="105" y="600" text-anchor="middle" dominant-baseline="central">病人時間軸</text><text class="ts" x="105" y="618" text-anchor="middle" dominant-baseline="central">依時序查閱</text></g>
+<g class="c-gray"><rect x="190" y="580" width="130" height="56" rx="4"/><text class="th" x="255" y="600" text-anchor="middle" dominant-baseline="central">每日加密備份</text><text class="ts" x="255" y="618" text-anchor="middle" dominant-baseline="central">留存成年後 7 年</text></g>
+<g class="c-teal"><rect x="340" y="580" width="130" height="56" rx="4" stroke-dasharray="5 3"/><text class="th" x="405" y="600" text-anchor="middle" dominant-baseline="central">搜尋・報表</text><text class="ts" x="405" y="618" text-anchor="middle" dominant-baseline="central">跨病人統計</text></g>
+<g class="c-teal"><rect x="490" y="580" width="130" height="56" rx="4" stroke-dasharray="5 3"/><text class="th" x="555" y="600" text-anchor="middle" dominant-baseline="central">數值結構化</text><text class="ts" x="555" y="618" text-anchor="middle" dominant-baseline="central">接減重・生長</text></g>
+<rect x="40" y="649" width="14" height="14" rx="3" fill="var(--card)" stroke="var(--ln)" stroke-width="0.5"/>
+<text class="ts" x="62" y="656" text-anchor="start" dominant-baseline="central">第一版（v0）就有</text>
+<rect x="200" y="649" width="14" height="14" rx="3" fill="var(--card)" stroke="var(--ln)" stroke-width="0.5" stroke-dasharray="4 3"/>
+<text class="ts" x="222" y="656" text-anchor="start" dominant-baseline="central">之後階段：v1 LINE 自動接收・v2 歷史回溯與數值結構化</text>
+</svg>
+    </div>
+    <p class="fig-cap">系統總架構。實線的方塊＝第一版（v0）就有；虛線＝之後的 v1、v2 才會加。</p>
+    <ul class="bullets">
+      <li><b>資料從上面進來：</b>同仁手機拍的照片、檢驗所傳來的報告。（虛線那兩格「LINE 自動接收」「歷史資料回溯」是之後才加。）</li>
+      <li><b>中間「整合層」自動整理：</b>讀出照片和報告上的身分證字號，經過雙重檢查，用證號當資料夾把東西歸好；讀不準的送「待確認佇列」交給人處理。</li>
+      <li><b>整理好之後：</b>每位病人一條時間軸可以依時間翻閱，資料每天加密備份。</li>
+    </ul>
+  </section>
+
+  <section id="dothree">
+    <h2><span class="idx">03</span>同仁只要做三件事</h2>
+    <p>系統背後有很多步驟，但落到同仁身上，其實只有三件事。</p>
+    <ol class="steps">
+      <li>
+        <h3>掃 QR、用手機拍照</h3>
+        <p>手機連診所 Wi-Fi，掃護理站牆上的 QR code，用「診間快照」拍。拍法照下面的〈拍照協定〉。</p>
+      </li>
+      <li>
+        <h3>把 LINE 的檢驗報告拖進 inbox 資料夾</h3>
+        <p>檢驗所傳來報告後，在電腦上的 LINE 把影像拖進 inbox（收件）資料夾，剩下系統自動整理。第一版（v0）這一步先由人做。</p>
+      </li>
+      <li>
+        <h3>「待確認」清單出現時，順手處理</h3>
+        <p>系統認不準的會放進「待確認」清單。請管理者順手核對，把它指定給正確的病人就好。</p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="photo">
+    <h2><span class="idx">04</span>拍照協定：N0</h2>
+    <p class="mnemonic">先拍卡、再拍灶；換病人、重新拍卡。</p>
+    <p>「N0」就是每一批照片的<b>第一張</b>：把健保卡和病灶拍在同一張裡（卡片放病灶旁、字面朝上、不反光），讓系統知道這批是哪位病人。之後的特寫（N1、N2…）就不用再拍卡了。</p>
+    <div class="svg-scroll">
+      <svg width="100%" viewBox="0 0 680 530" role="img" aria-label="病灶拍照 N0 錨定協定"><defs><marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<g class="c-purple"><rect x="220" y="50" width="240" height="56" rx="4"/><text class="th" x="340" y="70" text-anchor="middle" dominant-baseline="central">N0：健保卡＋病灶同框</text><text class="ts" x="340" y="88" text-anchor="middle" dominant-baseline="central">這一批的身份錨點</text></g>
+<line class="arr" x1="340" y1="106" x2="340" y2="142" marker-end="url(#arrow2)"/>
+<g class="c-gray"><rect x="220" y="146" width="240" height="56" rx="4"/><text class="th" x="340" y="166" text-anchor="middle" dominant-baseline="central">N1–Nn：病灶連拍特寫</text><text class="ts" x="340" y="184" text-anchor="middle" dominant-baseline="central">卡片不必再入鏡</text></g>
+<line class="arr" x1="340" y1="202" x2="340" y2="238" marker-end="url(#arrow2)"/>
+<g class="c-gray"><rect x="220" y="242" width="240" height="56" rx="4"/><text class="th" x="340" y="262" text-anchor="middle" dominant-baseline="central">確認送出＝完成一批</text><text class="ts" x="340" y="280" text-anchor="middle" dominant-baseline="central">手機端核對辨識結果</text></g>
+<line class="arr" x1="340" y1="298" x2="340" y2="334" marker-end="url(#arrow2)"/>
+<g class="c-purple"><rect x="220" y="338" width="240" height="56" rx="4"/><text class="th" x="340" y="358" text-anchor="middle" dominant-baseline="central">伺服器複掃整批</text><text class="ts" x="340" y="376" text-anchor="middle" dominant-baseline="central">清點批內所有證號</text></g>
+<path class="arr" d="M340 394 V414 H220 V430" fill="none" marker-end="url(#arrow2)"/>
+<path class="arr" d="M340 394 V414 H460 V430" fill="none" marker-end="url(#arrow2)"/>
+<g class="c-teal"><rect x="120" y="434" width="200" height="56" rx="4"/><text class="th" x="220" y="454" text-anchor="middle" dominant-baseline="central">歸檔判準全過</text><text class="ts" x="220" y="472" text-anchor="middle" dominant-baseline="central">整批自動歸檔</text></g>
+<g class="c-amber"><rect x="360" y="434" width="200" height="56" rx="4"/><text class="th" x="460" y="454" text-anchor="middle" dominant-baseline="central">其餘所有情況</text><text class="ts" x="460" y="472" text-anchor="middle" dominant-baseline="central">整批進待確認佇列</text></g>
+</svg>
+    </div>
+    <p class="fig-cap">N0 錨定協定：一批照片從拍到自動歸檔的流程。</p>
+    <h3>三條鐵律</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>鐵律</th><th>原因</th></tr></thead>
+        <tbody>
+          <tr><td>一批只拍一位病人</td><td>系統偵測到一批裡有兩個不同證號，會整批退回人工，等於白拍。</td></tr>
+          <tr><td>換病人一定重新 N0</td><td>身份不會跨批延續——這是防止照片歸錯人的設計，不是故障。</td></tr>
+          <tr><td>只用系統拍，不用相機 App</td><td>系統拍的照片不會存進你的手機相簿；相機 App 拍的會，事後要自己刪，還可能同步上雲。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="archive">
+    <h2><span class="idx">05</span>歸檔長什麼樣</h2>
+    <p>每位病人一個資料夾，資料夾名字就是身分證字號，裡面的檔名開頭是日期。系統用三個維度收東西：<b>哪位病人</b>、<b>哪一天</b>、<b>哪種類型</b>。</p>
+    <div class="svg-scroll">
+      <svg width="100%" viewBox="0 0 680 480" role="img" aria-label="歸類模式與資料夾結構"><defs><marker id="arrow3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<g class="c-purple"><rect x="40" y="50" width="180" height="56" rx="4"/><text class="th" x="130" y="70" text-anchor="middle" dominant-baseline="central">維度一：病人</text><text class="ts" x="130" y="88" text-anchor="middle" dominant-baseline="central">證號＝主資料夾</text></g>
+<g class="c-purple"><rect x="240" y="50" width="180" height="56" rx="4"/><text class="th" x="330" y="70" text-anchor="middle" dominant-baseline="central">維度二：日期</text><text class="ts" x="330" y="88" text-anchor="middle" dominant-baseline="central">檔名開頭 YYYY-MM-DD</text></g>
+<g class="c-purple"><rect x="440" y="50" width="180" height="56" rx="4"/><text class="th" x="530" y="70" text-anchor="middle" dominant-baseline="central">維度三：類型</text><text class="ts" x="530" y="88" text-anchor="middle" dominant-baseline="central">檔名標籤＋資料庫 tag</text></g>
+<g class="c-gray"><rect x="40" y="136" width="580" height="44" rx="4"/><text class="t" x="330" y="158" text-anchor="middle" dominant-baseline="central" style="font-family:var(--fm)">archive\{證號}\{日期}_{類型}_{序號}.jpg</text></g>
+<g class="c-gray"><rect x="40" y="210" width="230" height="40" rx="4"/><text class="th" x="155" y="230" text-anchor="middle" dominant-baseline="central">進站（inbox・staging）</text></g>
+<line class="arr" x1="155" y1="250" x2="155" y2="266" marker-end="url(#arrow3)"/>
+<g class="c-gray"><rect x="40" y="270" width="230" height="40" rx="4"/><text class="th" x="155" y="290" text-anchor="middle" dominant-baseline="central">解析・驗證・分類</text></g>
+<line class="arr" x1="92" y1="310" x2="92" y2="326" marker-end="url(#arrow3)"/>
+<line class="arr" x1="217" y1="310" x2="217" y2="326" marker-end="url(#arrow3)"/>
+<g class="c-teal"><rect x="40" y="330" width="105" height="40" rx="4"/><text class="th" x="92" y="350" text-anchor="middle" dominant-baseline="central">自動歸檔</text></g>
+<g class="c-amber"><rect x="165" y="330" width="105" height="40" rx="4"/><text class="th" x="217" y="350" text-anchor="middle" dominant-baseline="central">待確認</text></g>
+<line class="arr" x1="92" y1="370" x2="92" y2="386" marker-end="url(#arrow3)"/>
+<line class="arr" x1="217" y1="370" x2="217" y2="386" marker-end="url(#arrow3)"/>
+<g class="c-gray"><rect x="40" y="390" width="230" height="40" rx="4"/><text class="th" x="155" y="410" text-anchor="middle" dominant-baseline="central">已確認・可改派修正</text></g>
+<g class="c-teal"><rect x="300" y="210" width="340" height="240" rx="8"/><text class="th" x="316" y="232" text-anchor="start" dominant-baseline="central">伺服器資料夾一覽</text><text class="ts" x="316" y="258" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">archive\</text><text class="ts" x="316" y="276" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">├ A12345****\（遮罩示意）</text><text class="ts" x="316" y="294" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">│　2026-07-18_病灶照_01.jpg</text><text class="ts" x="316" y="312" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">│　2026-07-18_檢驗-CBC_01.jpg</text><text class="ts" x="316" y="330" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">│　2026-08-02_InBody_01.pdf</text><text class="ts" x="316" y="348" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">└ …每位病人一個資料夾</text><text class="ts" x="316" y="372" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">inbox\ ─ 收件（LINE 拖入）</text><text class="ts" x="316" y="390" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">staging\ ─ 手機上傳暫存</text><text class="ts" x="316" y="408" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">review\ ─ 待確認區</text><text class="ts" x="316" y="426" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">clinic.db ─ SQLite 索引＋稽核</text></g>
+</svg>
+    </div>
+    <p class="fig-cap">歸類方式與伺服器資料夾一覽。圖中的 <span class="mono">A12345****</span> 是<b>後四碼遮罩的格式示意</b>，不是真實證號。</p>
+    <p class="card"><b>資料夾用檔案總管就能開，系統壞了資料也不會不見。</b>系統做的只是自動整理和建索引；就算整合層停了，管理者照樣能用電腦的檔案總管直接打開資料夾，看照片和報告。（平時查資料請走系統介面——系統會留查閱紀錄；直接開資料夾是少數管理者的救援通道。）</p>
+  </section>
+
+  <section id="privacy">
+    <h2><span class="idx">06</span>安全與隱私</h2>
+    <ul class="checklist">
+      <li><b>照片不經網際網路：</b>手機拍照走診所自己的 Wi-Fi（區網，就是診所內部網路），直接進診所的電腦，不經過外面的網際網路、不上雲端。</li>
+      <li><b>報告照舊從 LINE 進來，落地後不再上雲：</b>檢驗所傳報告本來就是走 LINE（這個現行流程不變）；報告進到診所系統之後的辨識、整理、儲存全部在診所內完成，不再上傳任何雲端。</li>
+      <li><b>不會存進私人手機相簿：</b>用系統拍的照片不會留在你的手機裡。</li>
+      <li><b>伺服器與備份都加密：</b>存資料的電腦整顆硬碟加密；備份照「三份、兩種媒體、一份放診所外」的原則做，放到診所外的那份是**加密的備援硬碟**（防火災竊盜，鑰匙由兩人分別保管）——除此之外，資料不放進任何雲端。</li>
+      <li><b>用系統查閱都有紀錄：</b>誰、什麼時候、看了誰的資料，系統都會記下來；直接開資料夾只保留給極少數管理者，另以 Windows 系統層稽核補齊那一段的紀錄。</li>
+      <li><b>依法保存：</b>病歷至少保存 7 年；未成年病人保存到成年後 7 年——病人年紀越小要放越久（新生兒的紀錄約需保存 25 年）。</li>
+    </ul>
+  </section>
+
+  <section id="phases">
+    <h2><span class="idx">07</span>分階段推出</h2>
+    <p>系統一次到位太大，所以分三階段，先讓最有用的先上線。</p>
+    <div class="phases">
+      <div class="phase"><span class="tag">v0</span><p>手機拍照自動歸檔、檢驗報告人工拖進 inbox 後自動整理、每位病人一條唯讀時間軸。</p></div>
+      <div class="phase"><span class="tag">v1</span><p>檢驗所的 LINE 報告自動接收（不用再手動拖）、檢驗報告細分子類、病灶加上部位標籤。</p></div>
+      <div class="phase"><span class="tag">v2</span><p>把過去的舊資料批次匯入、檢驗數值結構化、同一個病灶跨次就診前後對比。</p></div>
+    </div>
+  </section>
+
+  <section id="limits">
+    <h2><span class="idx">08</span>誠實說清楚的限制</h2>
+    <p>這套系統很有用，但不是萬能。以下先講清楚，免得誤會。</p>
+    <div class="stack">
+      <div class="limit">
+        <h3>電腦會認錯字，所以一定有人把關</h3>
+        <p>電腦讀字（OCR，就是自動讀出圖片上的文字）不是百分之百準。認不準的一律進「待確認佇列」交給人核對，系統絕不自己亂猜。身分證字號有「檢查碼」規則把關，絕大多數讀錯一碼的情況會被擋下；漏網的少數，再靠「生日要核對得上」和「第一次出現的證號一定由人確認」這兩道規則補住。</p>
+      </div>
+      <div class="limit">
+        <h3>手寫的內容讀不出來</h3>
+        <p>目前只能讀印出來的字，手寫的內容不在能力範圍內。</p>
+      </div>
+      <div class="limit">
+        <h3>真實報告要先驗證，才會大量開用</h3>
+        <p>目前的測試是用電腦合成的乾淨報告圖：在 30 張測試圖上，最關鍵的身分證字號每一張都讀對——但這是乾淨圖的「上限」。真實報告（點陣印表、傳真、手機斜拍反光）要拿實際的件驗證過，才會放量。細節見 <span class="mono">bench/RESULTS.md</span>。</p>
+      </div>
+      <div class="limit">
+        <h3>這是輔助歸檔，不是病歷本體</h3>
+        <p>系統幫忙把照片和報告收好、找得到；正式病歷仍以診所既有的病歷（HIS）為準。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2><span class="idx">09</span>常見問題</h2>
+    <div class="faq">
+      <details>
+        <summary>卡片辨識失敗怎麼辦？</summary>
+        <div class="a">重拍一張（對準、放大、避免反光）；還是不行就按「手動輸入」，打病歷號或身分證字號。</div>
+      </details>
+      <details>
+        <summary>病人沒帶健保卡、或新生兒還沒有身分證字號？</summary>
+        <div class="a">直接用「手動輸入」。</div>
+      </details>
+      <details>
+        <summary>拍完才發現選錯人？</summary>
+        <div class="a">告訴管理者，在「待確認佇列」一鍵改派，照片會移到正確病人名下，並留下稽核紀錄。</div>
+      </details>
+      <details>
+        <summary>手機連不上怎麼辦？</summary>
+        <div class="a">先確認連的是診所 Wi-Fi（不是手機的 4G／5G 行動網路），再重掃一次 QR code。</div>
+      </details>
+      <details>
+        <summary>為什麼換病人一定要重拍健保卡？</summary>
+        <div class="a">因為身份只在「一批」照片裡有效，不會延續到下一批。這是故意設計來防止照片歸錯人，不是系統壞掉。</div>
+      </details>
+    </div>
+  </section>
+
+  <footer>
+    <p class="row"><b>平安聯合診所 · 內部說明</b></p>
+    <p class="row">原始碼與文件在 GitHub：<a href="https://github.com/med95Albert/clinic-photo-archive">github.com/med95Albert/clinic-photo-archive</a></p>
+    <p class="row">本頁與文件以 MIT License 授權。</p>
+    <p class="row note">文件與圖示中的身分證字號一律以後四碼遮罩的格式示意（如 A12345****）呈現，非真實個資。</p>
+  </footer>
+
+</div>
+</body>
+</html>
