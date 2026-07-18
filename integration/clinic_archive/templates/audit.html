@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}稽核紀錄 — 診所照片歸檔{% endblock %}
+{% block content %}
+<h1>稽核紀錄（最近 500 筆）</h1>
+{% if rows %}
+  <table>
+    <tr><th>時間</th><th>操作者</th><th>動作</th><th>病人</th><th>細節</th></tr>
+    {% for r in rows %}
+      <tr>
+        <td class="muted">{{ r.ts }}</td>
+        <td>{{ r.actor }}</td>
+        <td>{{ r.action }}</td>
+        <td>{{ r.patient_key or "—" }}</td>
+        <td>{{ r.detail or "—" }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p class="empty">尚無稽核紀錄。</p>
+{% endif %}
+{% endblock %}

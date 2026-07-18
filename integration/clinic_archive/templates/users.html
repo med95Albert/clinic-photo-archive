@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}帳號管理 — 診所照片歸檔{% endblock %}
+{% block content %}
+<h1>帳號管理</h1>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<table>
+  <tr><th>帳號</th><th>角色</th><th>建立時間</th></tr>
+  {% for u in users %}
+    <tr>
+      <td>{{ u.username }}</td>
+      <td>{{ "管理員" if u.role == "manager" else "檢視者" }}</td>
+      <td class="muted">{{ u.created_at }}</td>
+    </tr>
+  {% endfor %}
+</table>
+
+<h2>新增帳號</h2>
+<form class="action" method="post" action="/users">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+  <label for="username">帳號</label>
+  <input id="username" name="username" autocomplete="off" required>
+  <label for="password">密碼</label>
+  <input id="password" name="password" type="password" autocomplete="new-password" required>
+  <label for="role">角色</label>
+  <select id="role" name="role">
+    <option value="viewer">檢視者（viewer）</option>
+    <option value="manager">管理員（manager）</option>
+  </select>
+  <br>
+  <button class="btn" type="submit">建立帳號</button>
+</form>
+{% endblock %}

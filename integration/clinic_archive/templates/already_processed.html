@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}已處理 — 診所照片歸檔{% endblock %}
+{% block content %}
+<h1>此項已被處理</h1>
+<div class="card">
+  <p>{{ message or "這個佇列項目已經被處理過了，系統未再重複歸檔。" }}</p>
+  <p class="muted">
+    你送出的動作抵達時，此項已由（可能是另一位管理者或稍早的重複送出）先行結案。
+    為避免產生重複病人或覆寫稽核，系統不再重放這次動作。
+  </p>
+  <p><a href="/">← 回佇列總覽</a></p>
+</div>
+{% endblock %}

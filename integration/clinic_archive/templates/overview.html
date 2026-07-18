@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}佇列總覽 — 診所照片歸檔{% endblock %}
+{% block content %}
+<h1>待確認佇列（{{ total }}）</h1>
+{% if total == 0 %}
+  <p class="empty">目前沒有待確認項目。</p>
+{% else %}
+  {% for kind, items in grouped.items() %}
+    <h2>{{ kind_labels.get(kind, kind) }}（{{ items|length }}）</h2>
+    {% for it in items %}
+      <div class="card">
+        <div>
+          <span class="pill">#{{ it.id }}</span>
+          <span class="reason">{{ it.reason }}</span>
+        </div>
+        <div class="muted">建立時間：{{ it.created_at }}</div>
+        {% if user.role == "manager" %}
+          <div><a href="/queue/{{ it.id }}">前往處理 →</a></div>
+        {% else %}
+          <div class="muted">（需管理員權限處理）</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}佇列 #{{ item.id }} — 診所照片歸檔{% endblock %}
+{% block content %}
+<p><a href="/">← 回佇列總覽</a></p>
+<h1>{{ kind_labels.get(item.kind, item.kind) }} #{{ item.id }}</h1>
+<div class="muted">原因：<span class="reason">{{ item.reason }}</span>　建立時間：{{ item.created_at }}</div>
+{% if payload.partial %}
+<div class="error">⚠️ 此項先前處理已部分完成{% if payload.partial.patient_key %}（已建病人 {{ payload.partial.patient_key }}）{% endif %}{% if payload.partial.filed %}（已歸 {{ payload.partial.filed|length }} 檔）{% endif %}——請用「既有病人」選擇該代號繼續，系統已封鎖再新建。</div>
+{% endif %}
+{% if batch_key %}<div class="muted">批次鍵：{{ batch_key }}</div>{% endif %}
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<h2>檔案（{{ files|length }}）</h2>
+{% if files %}
+  <div class="thumbs">
+    {% for i, f in files %}
+      <img src="/queue/{{ item.id }}/file/{{ i }}" alt="第 {{ i + 1 }} 張" loading="lazy">
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="empty">此項目無附檔。</p>
+{% endif %}
+
+<h2>擷取欄位</h2>
+{% if extracted %}
+  <table>
+    {% for k, v in extracted.items() %}
+      <tr>
+        <th>{{ extracted_labels.get(k, k) }}</th>
+        <td>{% if v is string %}{{ v }}{% elif v is iterable %}{{ v | join("、") }}{% else %}{{ v }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p class="empty">無擷取欄位。</p>
+{% endif %}
+
+{% if is_card_suspect %}
+<h2>證件照處置（二選一）</h2>
+<p class="muted">
+  系統偵測此批可能含健保卡／證件影像。請判讀後二選一，<strong>預設為保留</strong>，
+  以免誤刪臨床照。兩者差異：
+</p>
+<ul class="muted">
+  <li><strong>保留</strong>：這是「卡＋病灶同框」的 N0 錨定照（臨床照），保留原檔與紀錄、不搬不刪。</li>
+  <li><strong>移除</strong>：這是純卡片照（無病灶入鏡、僅用於身份綁定），實體檔移入 trash（可回收）、刪除該紀錄列。</li>
+</ul>
+
+<form class="action" method="post" action="/queue/{{ item.id }}/resolve">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+  <input type="hidden" name="action" value="card_keep">
+  <strong>① 保留（卡＋病灶同框 N0，預設）</strong>
+  <p class="muted">保留原檔與 record，不做任何搬移或刪除，僅將此佇列項結案。</p>
+  <button class="btn" type="submit">保留並結案</button>
+</form>
+
+<form class="action" method="post" action="/queue/{{ item.id }}/resolve"
+      onsubmit="return confirm('確定這是純卡片照？將移入 trash 並從紀錄移除。');">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+  <input type="hidden" name="action" value="delete_card">
+  <strong>② 純卡片照，移除</strong>
+  <p class="muted">實體檔移入 trash（可回收，非永久刪除）、刪除該 record 列後結案。</p>
+  <button class="btn danger" type="submit">移除卡片照</button>
+</form>
+{% endif %}
+
+{% if not is_card_suspect %}
+<h2>指定病人並歸檔</h2>
+
+<form class="action" method="get" action="/queue/{{ item.id }}">
+  <label for="q">搜尋既有病人（證號 / 姓名 / 病歷號）</label>
+  <input id="q" name="q" value="{{ q }}" placeholder="輸入關鍵字後搜尋">
+  <button class="btn secondary" type="submit">搜尋</button>
+</form>
+
+{% if results is not none %}
+  {% if results %}
+    <table>
+      <tr><th>病人代碼</th><th>姓名</th><th>生日</th><th>病歷號</th><th></th></tr>
+      {% for p in results %}
+        <tr>
+          <td>{{ p.patient_key }}</td>
+          <td>{{ p.name or "—" }}</td>
+          <td>{{ p.dob or "—" }}</td>
+          <td>{{ p.chart_no or "—" }}</td>
+          <td>
+            <form method="post" action="/queue/{{ item.id }}/resolve" style="margin:0">
+              <input type="hidden" name="csrf" value="{{ user.csrf }}">
+              <input type="hidden" name="action" value="existing">
+              <input type="hidden" name="patient_key" value="{{ p.patient_key }}">
+              <button class="btn" type="submit">選此人並歸檔</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="empty">查無符合的病人。</p>
+  {% endif %}
+{% endif %}
+
+<form class="action" method="post" action="/queue/{{ item.id }}/resolve">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+  <input type="hidden" name="action" value="new_id">
+  <strong>建新病人（輸入身分證號）</strong>
+  <label for="patient_id">身分證號 / 統一證號</label>
+  <input id="patient_id" name="patient_id" placeholder="A123456789">
+  <label for="name_id">姓名（選填）</label>
+  <input id="name_id" name="name">
+  <label for="dob_id">生日（選填，YYYY-MM-DD）</label>
+  <input id="dob_id" name="dob" placeholder="2015-01-01">
+  <br>
+  <button class="btn" type="submit">建檔並歸檔</button>
+</form>
+
+<form class="action" method="post" action="/queue/{{ item.id }}/resolve">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+  <input type="hidden" name="action" value="new_pcode">
+  <strong>建新病人（一鍵配 P 碼）</strong>
+  <p class="muted">尚無證號時使用；系統自動配發下一個 P- 流水號。</p>
+  <label for="name_p">姓名（選填）</label>
+  <input id="name_p" name="name">
+  <label for="dob_p">生日（選填，YYYY-MM-DD）</label>
+  <input id="dob_p" name="dob" placeholder="2015-01-01">
+  <br>
+  <button class="btn" type="submit">配 P 碼並歸檔</button>
+</form>
+{% endif %}
+{% endblock %}

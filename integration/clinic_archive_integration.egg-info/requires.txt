@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+jinja2
+python-multipart
+rapidocr
+onnxruntime
+pillow
+
+[dev]
+pytest
+httpx

@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: clinic-archive-integration
+Version: 0.1.0
+Summary: 診所照片與檢驗報告歸檔整合層 v0
+Requires-Python: >=3.11
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: jinja2
+Requires-Dist: python-multipart
+Requires-Dist: rapidocr
+Requires-Dist: onnxruntime
+Requires-Dist: pillow
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: httpx; extra == "dev"

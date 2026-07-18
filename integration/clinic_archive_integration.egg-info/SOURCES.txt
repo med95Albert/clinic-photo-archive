@@ -1,0 +1,7 @@
+pyproject.toml
+clinic_archive/__init__.py
+clinic_archive_integration.egg-info/PKG-INFO
+clinic_archive_integration.egg-info/SOURCES.txt
+clinic_archive_integration.egg-info/dependency_links.txt
+clinic_archive_integration.egg-info/requires.txt
+clinic_archive_integration.egg-info/top_level.txt

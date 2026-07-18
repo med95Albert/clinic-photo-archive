@@ -1,0 +1,14 @@
+[project]
+name = "clinic-archive-integration"
+version = "0.1.0"
+description = "診所照片與檢驗報告歸檔整合層 v0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi", "uvicorn", "jinja2", "python-multipart",
+  "rapidocr", "onnxruntime", "pillow",
+]
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+[tool.pytest.ini_options]
+markers = ["e2e: needs model download / live OCR"]
+addopts = "-m 'not e2e'"

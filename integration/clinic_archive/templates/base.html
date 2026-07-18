@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}診所照片歸檔{% endblock %}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+      background: #f4f5f7;
+      color: #1f2933;
+      line-height: 1.5;
+    }
+    header {
+      background: #2b6777;
+      color: #fff;
+      padding: 0.6rem 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem 0.9rem;
+    }
+    header .brand { font-weight: 700; margin-right: auto; }
+    header a { color: #d6ecf3; text-decoration: none; font-size: 0.95rem; }
+    header a:hover { color: #fff; text-decoration: underline; }
+    header form { margin: 0; }
+    header button {
+      background: none; border: 1px solid #d6ecf3; color: #d6ecf3;
+      border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.85rem; cursor: pointer;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 1rem; }
+    h1 { font-size: 1.3rem; margin: 0.3rem 0 1rem; }
+    h2 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+    a { color: #2b6777; }
+    .card {
+      background: #fff; border: 1px solid #e1e5ea; border-radius: 8px;
+      padding: 0.9rem; margin-bottom: 0.9rem;
+    }
+    .muted { color: #6b7680; font-size: 0.85rem; }
+    .pill {
+      display: inline-block; background: #e3f0f3; color: #2b6777;
+      border-radius: 999px; padding: 0.05rem 0.6rem; font-size: 0.8rem;
+    }
+    .reason { color: #a15c00; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #eceef1; vertical-align: top; }
+    th { color: #6b7680; font-weight: 600; }
+    .thumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .thumbs img {
+      width: 140px; height: 140px; object-fit: cover;
+      border-radius: 6px; border: 1px solid #d9dde2; background: #fff;
+    }
+    form.action { margin: 0.6rem 0; padding: 0.7rem; background: #fafbfc; border: 1px solid #e6e9ed; border-radius: 6px; }
+    label { display: block; font-size: 0.85rem; margin: 0.4rem 0 0.15rem; color: #45505c; }
+    input, select {
+      width: 100%; max-width: 360px; padding: 0.45rem 0.5rem;
+      border: 1px solid #c7ccd3; border-radius: 5px; font-size: 1rem;
+    }
+    button.btn, input[type=submit] {
+      margin-top: 0.6rem; background: #2b6777; color: #fff; border: none;
+      border-radius: 5px; padding: 0.5rem 0.9rem; font-size: 0.95rem; cursor: pointer;
+      width: auto; max-width: none;
+    }
+    button.btn.danger { background: #a4373a; }
+    button.btn.secondary { background: #52616b; }
+    .error { background: #fdecea; color: #a4373a; border: 1px solid #f3c2bf; padding: 0.5rem 0.7rem; border-radius: 6px; margin-bottom: 0.8rem; }
+    .empty { color: #6b7680; padding: 1rem 0; }
+  </style>
+</head>
+<body>
+  {% if user %}
+  <header>
+    <span class="brand">診所照片歸檔</span>
+    <a href="/">佇列</a>
+    <a href="/patients">病人</a>
+    {% if user.role == "manager" %}
+    <a href="/users">帳號</a>
+    <a href="/audit">稽核</a>
+    {% endif %}
+    <span class="muted">{{ user.username }}（{{ "管理員" if user.role == "manager" else "檢視者" }}）</span>
+    <form method="post" action="/logout">
+      <input type="hidden" name="csrf" value="{{ user.csrf }}">
+      <button type="submit">登出</button>
+    </form>
+  </header>
+  {% endif %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

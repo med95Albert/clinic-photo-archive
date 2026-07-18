@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ patient.patient_key }} 時間軸 — 診所照片歸檔{% endblock %}
+{% block content %}
+<p><a href="/patients">← 病人搜尋</a></p>
+<h1>{{ patient.name or patient.patient_key }}</h1>
+<div class="muted">
+  病人代碼：{{ patient.patient_key }}
+  {% if patient.dob %}　生日：{{ patient.dob }}{% endif %}
+  {% if patient.chart_no %}　病歷號：{{ patient.chart_no }}{% endif %}
+</div>
+<p class="muted">共 {{ count }} 筆紀錄</p>
+
+{% if count == 0 %}
+  <p class="empty">尚無歸檔紀錄。</p>
+{% else %}
+  {% for day, recs in days.items() %}
+    <h2>{{ day }}（{{ recs|length }}）</h2>
+    <div class="thumbs">
+      {% for r in recs %}
+        <figure style="margin:0">
+          <a href="/file/{{ r.id }}" target="_blank" rel="noopener">
+            <img src="/file/{{ r.id }}" alt="{{ r.rtype }}" loading="lazy">
+          </a>
+          <figcaption class="muted">
+            {{ r.rtype }}{% if r.subtype %}-{{ r.subtype }}{% endif %}
+            {% if r.status == "confirmed" %}✓{% endif %}
+          </figcaption>
+        </figure>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

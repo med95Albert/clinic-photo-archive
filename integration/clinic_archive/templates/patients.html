@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}病人搜尋 — 診所照片歸檔{% endblock %}
+{% block content %}
+<h1>病人搜尋</h1>
+<form class="action" method="get" action="/patients">
+  <label for="q">關鍵字（證號 / 姓名 / 病歷號）</label>
+  <input id="q" name="q" value="{{ q }}" autofocus>
+  <button class="btn" type="submit">搜尋</button>
+</form>
+
+{% if results %}
+  <table>
+    <tr><th>病人代碼</th><th>姓名</th><th>生日</th><th>病歷號</th></tr>
+    {% for p in results %}
+      <tr>
+        <td><a href="/p/{{ p.patient_key }}">{{ p.patient_key }}</a></td>
+        <td>{{ p.name or "—" }}</td>
+        <td>{{ p.dob or "—" }}</td>
+        <td>{{ p.chart_no or "—" }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p class="empty">{% if q %}查無符合「{{ q }}」的病人。{% else %}尚無病人資料。{% endif %}</p>
+{% endif %}
+{% endblock %}
