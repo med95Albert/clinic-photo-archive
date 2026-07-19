@@ -29,6 +29,15 @@
 2. 本機看網頁：用任何瀏覽器開啟 `docs/index.html`
 3. 讀架構文件：`docs/architecture.md`（GitHub 上可直接閱讀，含 mermaid 流程圖）
 
+### 診所伺服器部署（Claude Code 一行指令）
+
+診所的 Windows 伺服器裝好 Claude Code 後，開一個 session 貼這一行即可（agent 會照
+[deploy/AGENT_DEPLOY.md](deploy/AGENT_DEPLOY.md) 的 runbook 逐步安裝、驗證、產出驗收報告）：
+
+> 請 clone https://github.com/med95Albert/clinic-photo-archive 到 C:\ClinicArchive\repo，然後完整遵照 repo 內 deploy/AGENT_DEPLOY.md 執行部署與驗收，全程遵守其中的鐵律，最後給我完成報告與人類實體清單。
+
+配套：`deploy/bootstrap.ps1`（環境建置加速器）、`deploy/verify.ps1`（驗收電池，結尾自報 VERIFY: PASS/FAIL）。
+
 ### （選配）重跑 OCR 基準測試
 
 需要 Python 3.11+，並在本機另外 clone ClinicSnap（本 repo 不包含其程式碼）：
