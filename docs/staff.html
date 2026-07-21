@@ -74,6 +74,11 @@ h2{font-size:23px;margin:0 0 6px}
 .mnemonic{margin:18px 0 0;background:var(--accent-bg);border:1px solid var(--accent-bd);
   border-radius:var(--r);padding:18px;text-align:center;color:var(--accent);font-weight:700;
   font-size:20px;letter-spacing:.06em}
+.cam{margin:16px 0 0;background:var(--good-bg);border:1px solid var(--good-bd);border-radius:var(--r);
+  padding:18px 20px;display:flex;gap:16px;align-items:flex-start}
+.cam .ico{font-size:28px;line-height:1;flex:none}
+.cam h3{margin:0 0 4px;font-size:17px;color:var(--good)}
+.cam p{margin:0;color:var(--tp);font-size:15.5px}
 
 /* benefits */
 .benefits{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
@@ -114,7 +119,7 @@ footer{text-align:center;color:var(--ts2);font-size:14px;padding:30px 0 0;line-h
     <h2>現在，你是不是這樣做的？</h2>
     <p class="sub">拍一張病灶照，真正花時間的往往不是「拍」，而是拍完之後那一串工。</p>
     <ul class="pain">
-      <li><span class="n">1</span><span>拍在自己手機裡，相簿越積越亂</span></li>
+      <li><span class="n">1</span><span>用手機拍，存在相簿越積越亂；用相機拍，還要接電腦一張張上傳</span></li>
       <li><span class="n">2</span><span>要想辦法傳到電腦（LINE 傳給自己、接傳輸線…）</span></li>
       <li><span class="n">3</span><span>一張一張分類、改名、丟到對的資料夾</span></li>
       <li><span class="n">4</span><span>下次要找舊照片，翻半天找不到</span></li>
@@ -168,6 +173,14 @@ footer{text-align:center;color:var(--ts2);font-size:14px;padding:30px 0 0;line-h
       </li>
     </ol>
     <div class="mnemonic">先拍卡、再拍灶；換病人、重新拍卡</div>
+
+    <div class="cam">
+      <div class="ico">📷</div>
+      <div>
+        <h3>用相機拍的，一樣適用</h3>
+        <p>不是只有手機能用。習慣用相機拍病灶的，把照片<strong>拉進電腦上的收件資料夾</strong>就好——系統會自動辨識、幫你歸檔：認得出是誰的直接歸到正確病人，認不出的也只要在清單上<strong>點一下指定</strong>，不用再一張張改名、分資料夾。<br><span style="color:var(--ts2);font-size:14px">小訣竅：同一位病人的照片裡，有一張拍到健保卡，系統就更容易自動認出、直接歸好。</span></p>
+      </div>
+    </div>
   </section>
 
   <section>
