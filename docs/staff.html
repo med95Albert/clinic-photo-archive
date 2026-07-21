@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拍完就自動歸檔｜平安聯合診所 給同仁</title>
+<meta name="description" content="用手機拍病灶、拍文件，系統自動歸到正確的病人名下。不用傳、不用分類、不用怕弄丟——省下你每天整理照片的時間。">
+<style>
+:root{
+  --bg:#faf9f5; --card:#ffffff; --tp:#1f1e1b; --ts2:#66655e; --bd:#e7e5dd; --ln:#8a8a86;
+  --accent:#534AB7; --accent-bg:#EEEDFE; --accent-bd:#cfcbf3;
+  --good:#0F6E56; --good-bg:#E1F5EE; --good-bd:#bfe6d8;
+  --warn:#854F0B; --warn-bg:#FAEEDA;
+  --f:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  --maxw:720px; --r:16px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#1b1a16; --card:#282722; --tp:#f0efea; --ts2:#a8a79f; --bd:#3a3934; --ln:#55554f;
+    --accent:#AFA9EC; --accent-bg:#332c66; --accent-bd:#463c88;
+    --good:#5DCAA5; --good-bg:#0c3e33; --good-bd:#12563f; --warn:#EF9F27; --warn-bg:#3a2c10;}
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--tp);font-family:var(--f);
+  font-size:17px;line-height:1.75;-webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 20px 80px}
+h1,h2,h3{line-height:1.3;font-weight:600}
+p{margin:12px 0}
+a{color:var(--accent)}
+
+/* hero */
+.hero{padding:52px 0 8px;text-align:center}
+.badge{display:inline-block;font-size:13.5px;color:var(--accent);background:var(--accent-bg);
+  border:1px solid var(--accent-bd);padding:5px 15px;border-radius:999px;font-weight:600}
+.hero h1{font-size:32px;margin:20px 0 14px;letter-spacing:.01em}
+.hero .lead{font-size:18px;color:var(--ts2);margin:0 auto;max-width:560px}
+.hero .big{color:var(--tp);font-weight:600}
+
+section{padding:34px 0;border-top:1px solid var(--bd)}
+section:first-of-type{border-top:0}
+h2{font-size:23px;margin:0 0 6px}
+.sub{color:var(--ts2);font-size:16px;margin:0 0 18px}
+
+/* pain list */
+.pain{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.pain li{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:13px 16px;
+  color:var(--ts2);font-size:16px;display:flex;gap:12px;align-items:flex-start}
+.pain li .n{color:var(--ln);font-weight:600;flex:none}
+.pain .punch{background:var(--warn-bg);border-color:transparent;color:var(--warn);font-weight:600}
+
+/* before / after */
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+@media(max-width:520px){.ba{grid-template-columns:1fr}}
+.ba .col{border-radius:var(--r);padding:18px 18px 20px;border:1px solid var(--bd)}
+.ba .before{background:var(--card)}
+.ba .after{background:var(--good-bg);border-color:var(--good-bd)}
+.ba h3{font-size:15px;margin:0 0 12px;letter-spacing:.02em}
+.ba .before h3{color:var(--ts2)}
+.ba .after h3{color:var(--good)}
+.ba ol{margin:0;padding-left:20px;font-size:15.5px;color:var(--tp)}
+.ba .before ol{color:var(--ts2)}
+.ba li{margin:7px 0}
+.ba .done{list-style:none;margin-left:-20px;font-weight:600;color:var(--good);font-size:17px}
+
+/* steps */
+.steps{list-style:none;counter-reset:s;padding:0;margin:16px 0 0;display:grid;gap:14px}
+.steps li{position:relative;background:var(--card);border:1px solid var(--bd);border-radius:var(--r);
+  padding:18px 20px 18px 68px;counter-increment:s}
+.steps li::before{content:counter(s);position:absolute;left:18px;top:16px;width:36px;height:36px;
+  border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:19px;
+  display:flex;align-items:center;justify-content:center}
+.steps h3{margin:0 0 4px;font-size:18px}
+.steps p{margin:0;color:var(--ts2);font-size:15.5px}
+.mnemonic{margin:18px 0 0;background:var(--accent-bg);border:1px solid var(--accent-bd);
+  border-radius:var(--r);padding:18px;text-align:center;color:var(--accent);font-weight:700;
+  font-size:20px;letter-spacing:.06em}
+
+/* benefits */
+.benefits{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+@media(max-width:520px){.benefits{grid-template-columns:1fr}}
+.ben{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);padding:18px}
+.ben .ico{font-size:26px;line-height:1}
+.ben h3{margin:10px 0 4px;font-size:17px}
+.ben p{margin:0;color:var(--ts2);font-size:15px}
+
+/* faq */
+.faq{display:grid;gap:10px;margin-top:8px}
+details{background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+summary{cursor:pointer;padding:15px 44px 15px 17px;font-weight:600;font-size:16.5px;position:relative;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";position:absolute;right:18px;top:50%;transform:translateY(-50%);
+  color:var(--accent);font-size:22px;font-weight:400}
+details[open] summary::after{content:"–"}
+details .a{padding:0 17px 16px;color:var(--ts2);font-size:15.5px;line-height:1.7}
+
+/* close */
+.close{background:var(--accent-bg);border:1px solid var(--accent-bd);border-radius:var(--r);
+  padding:24px;text-align:center;margin-top:8px}
+.close p{margin:0;color:var(--tp);font-size:17px}
+.close .big{font-weight:600;font-size:19px;display:block;margin-bottom:8px}
+footer{text-align:center;color:var(--ts2);font-size:14px;padding:30px 0 0;line-height:1.9}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <span class="badge">平安聯合診所 · 給同仁</span>
+    <h1>拍完就自動歸檔<br>你不用再整理照片</h1>
+    <p class="lead">用手機拍病灶、拍文件，系統<span class="big">自動存到正確的病人名下</span>。不用傳、不用分類、不用怕弄丟——把你每天整理照片的時間省下來。</p>
+  </header>
+
+  <section>
+    <h2>現在，你是不是這樣做的？</h2>
+    <p class="sub">拍一張病灶照，真正花時間的往往不是「拍」，而是拍完之後那一串工。</p>
+    <ul class="pain">
+      <li><span class="n">1</span><span>拍在自己手機裡，相簿越積越亂</span></li>
+      <li><span class="n">2</span><span>要想辦法傳到電腦（LINE 傳給自己、接傳輸線…）</span></li>
+      <li><span class="n">3</span><span>一張一張分類、改名、丟到對的資料夾</span></li>
+      <li><span class="n">4</span><span>下次要找舊照片，翻半天找不到</span></li>
+      <li><span class="n">5</span><span>換手機、清 LINE，舊照片還怕不見</span></li>
+      <li class="punch"><span class="n">→</span><span>這些「拍完之後」的雜事，才是最花你時間的。</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>之後，會變這麼簡單</h2>
+    <p class="sub">同樣拍一張照片，你要做的事從六步變成兩步。</p>
+    <div class="ba">
+      <div class="col before">
+        <h3>以前</h3>
+        <ol>
+          <li>拍照</li>
+          <li>傳到電腦</li>
+          <li>分類</li>
+          <li>命名</li>
+          <li>歸檔</li>
+          <li>之後翻半天找</li>
+        </ol>
+      </div>
+      <div class="col after">
+        <h3>現在</h3>
+        <ol>
+          <li>拍照</li>
+          <li>按送出</li>
+          <li class="done">✅ 完成</li>
+        </ol>
+        <p style="margin:14px 0 0;color:var(--good);font-size:15px">系統自動幫你歸到正確的病人，你什麼都不用整理。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>你只要做 3 件事</h2>
+    <p class="sub">比用 LINE 傳照片還簡單。上手大概五分鐘。</p>
+    <ol class="steps">
+      <li>
+        <h3>掃 QR 打開</h3>
+        <p>手機連診所 Wi-Fi，掃護理站牆上的 QR Code。第一次掃完「加到主畫面」，之後天天一點就開，不用再掃。</p>
+      </li>
+      <li>
+        <h3>照口訣拍照</h3>
+        <p>每位病人的<strong>第一張</strong>，把健保卡和病灶拍在一起（系統靠這張認出是誰）。之後連拍病灶特寫就好，卡片不用再入鏡。</p>
+      </li>
+      <li>
+        <h3>按送出</h3>
+        <p>畫面會跳出辨識到的病人，你核對一下、按送出。完成——照片已經自動歸好了。</p>
+      </li>
+    </ol>
+    <div class="mnemonic">先拍卡、再拍灶；換病人、重新拍卡</div>
+  </section>
+
+  <section>
+    <h2>對你有什麼好處</h2>
+    <div class="benefits">
+      <div class="ben">
+        <div class="ico">⏱️</div>
+        <h3>省下整理時間</h3>
+        <p>拍完就歸好，不用再傳、分類、命名、找資料夾。每天那段「整理照片」的時間直接還給你。</p>
+      </div>
+      <div class="ben">
+        <div class="ico">📱</div>
+        <h3>不佔你手機、不進相簿</h3>
+        <p>用系統拍的照片不會留在你手機裡，也不會被雲端備份。你的相簿乾乾淨淨。</p>
+      </div>
+      <div class="ben">
+        <div class="ico">🗂️</div>
+        <h3>再也不怕弄丟</h3>
+        <p>照片存在診所電腦、每天備份。換手機、清 LINE、手機壞掉，通通不影響。</p>
+      </div>
+      <div class="ben">
+        <div class="ico">⚡</div>
+        <h3>找紀錄一秒調出</h3>
+        <p>同一個病人的照片和檢驗報告都收在一起，看診時直接看他的時間軸，不用大海撈針。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>你可能會問</h2>
+    <div class="faq">
+      <details>
+        <summary>會很難學嗎？</summary>
+        <div class="a">不會。掃碼、拍照、送出三步，比用 LINE 傳照片還簡單。第一次有人帶你走一遍，五分鐘就會了。</div>
+      </details>
+      <details>
+        <summary>我拍的照片會留在我手機嗎？</summary>
+        <div class="a">不會。用這個系統拍的照片不會進你的相簿，也不會被 iCloud／Google 相簿備份走。拍完直接進診所電腦，你手機上不留痕跡。</div>
+      </details>
+      <details>
+        <summary>拍錯病人怎麼辦？</summary>
+        <div class="a">不用重拍。跟管理者說一聲，在系統上一鍵改到正確的病人就好，照片會自動搬過去。</div>
+      </details>
+      <details>
+        <summary>為什麼換病人一定要重拍健保卡？</summary>
+        <div class="a">這樣系統才知道「接下來這幾張是這位病人的」。這是<strong>保護病人不被歸錯</strong>的設計，不是找你麻煩——養成「換人先拍卡」的習慣就順了。</div>
+      </details>
+      <details>
+        <summary>要記一堆帳號密碼嗎？</summary>
+        <div class="a">拍照本身不用登入。只有在要「看病人紀錄」或「處理待確認清單」時，用你自己那一組登入——會給你，記一組就好。</div>
+      </details>
+      <details>
+        <summary>病人的照片安全嗎？</summary>
+        <div class="a">很安全。照片只走診所自己的網路、存在診所電腦，不上任何雲端；誰看了誰的資料系統都有紀錄。這也是在保護病人，也保護你。</div>
+      </details>
+    </div>
+  </section>
+
+  <div class="close">
+    <p><span class="big">這套系統的目的，就是把「整理照片」這件雜事從你身上拿掉。</span>讓你少花時間在電腦前分類歸檔，多點時間照顧病人。有任何問題，問 Albert 或護理站，我們一起幫你上手。</p>
+  </div>
+
+  <footer>
+    平安聯合診所 · 內部宣導<br>
+    想了解系統背後怎麼運作？看 <a href="./index.html">技術說明頁</a>
+  </footer>
+
+</div>
+</body>
+</html>
