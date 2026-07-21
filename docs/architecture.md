@@ -127,7 +127,7 @@ archive\{身分證號}\{YYYY-MM-DD}_{類型}_{序號}.jpg
 | 階段 | 內容 |
 |---|---|
 | v0 | ClinicSnap 試點＋整合層（watcher、報告 OCR、證號歸檔、佇列）＋唯讀時間軸 |
-| v1 | LINE OA webhook 自動接收＋檢驗子類分類＋部位標籤＋向上游 ClinicSnap 提議批次 manifest 與原生 HTTPS（批次邊界／傳輸層硬化） |
+| v1 | LINE OA webhook 自動接收＋檢驗子類分類＋部位標籤＋**相機批次 N0 錨定**（拉進資料夾的相機病灶照套用 N0：首張拍卡為錨、同批其餘繼承同一病人，與逐張報告 inbox 分流）＋向上游 ClinicSnap 提議批次 manifest 與原生 HTTPS（批次邊界／傳輸層硬化） |
 | v2 | 歷史資料回溯批次匯入＋檢驗數值結構化＋病灶序列追蹤（跨次就診前後對比） |
 
 ## 10. 關鍵決策記錄
