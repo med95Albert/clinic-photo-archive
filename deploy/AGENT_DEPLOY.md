@@ -18,7 +18,7 @@
 
 1. **每一步做完必須驗證通過才能進下一步**；驗證失敗 → 先診斷，同法失敗兩次就停下來，把狀況整理給人類。
 2. **fail-closed**：任何不確定（路徑、既有檔案、防毒攔截）→ 停下問人，不猜、不硬繞。
-3. **絕不讀取病人資料入對話**：`clinic_data\` 底下的 `archive\`、`review\`、`staging\`、`inbox\`、`trash\` 內容一律不 cat/type/開檔；`clinic.db` 不 SELECT 病人列。`integration.log` 可以讀——整合層寫 log 前已把證號遮成 `A12345****`、暫時代號遮成 `P-123****`、inbox 檔名只印雜湊；**若在 log 裡看到未遮罩的證號或姓名，立刻停止讀取、回報為 bug**。ClinicSnap 的 `clinic_snap.log` 是上游程式寫的、未經遮罩：只准 `Select-String -Pattern 'error|exception|失敗|fail'` 抓錯誤行，**不得整檔 type**。`contract_test.py` 的輸出已遮罩，可以貼。
+3. **絕不讀取病人資料入對話**：`clinic_data\` 底下的 `archive\`、`review\`、`staging\`、`inbox\`、`trash\` 內容一律不 cat/type/開檔；`clinic.db` 不 SELECT 病人列。**任何 log 只准經本機淨化器讀**：在 `C:\ClinicArchive\repo\integration` 執行 `.\.venv\Scripts\python -m clinic_archive.redact <log 路徑> --tail 200`——它會遮證號、把工作資料夾下非系統產生的檔名換成雜湊、把網址 query 值換成 `<redacted>`。`integration.log`、ClinicSnap 的 `clinic_snap.log`、任何歷史 log 一律走這條；**不得** `Get-Content`／`type`／`Select-String` 直讀原檔（過濾錯誤行不是淨化）。`contract_test.py` 的輸出在來源端已做同樣淨化，可以貼。淨化器只認得結構化的識別碼、路徑與 query，自由文字裡的姓名認不出——若淨化後仍看到疑似姓名，停止並回報為 bug；這是最後防線，不是主要控制。
 4. **密碼不落對話**：`FIRST_RUN_ADMIN.txt` 的內容不得印出——只告訴人類檔案路徑，請他自己開。
 5. **不越界**：不碰 HIS、不裝清單外軟體、不改系統安全設定（防火牆規則除外，且要人類看到並同意）、不啟用 ClinicSnap 的網際網路（tunnel）模式。
 6. 需要系統管理員權限的步驟（防火牆、winget 裝軟體），先明講再請人類允許 UAC。

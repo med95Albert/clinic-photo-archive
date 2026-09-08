@@ -707,7 +707,11 @@ def queue_resolve(
                 conn, actor=actor, action="resolve", patient_key=target_key,
                 detail=f"queue#{item_id} 缺檔 {len(missing)}（未歸檔）：{names}",
             )
-            logger.warning("resolve 缺檔 %d：%s", len(missing), names)
+            # 檔名可能是人取的（inbox 來源）→ log 只印淨化後名稱；audit 才留原名。
+            logger.warning(
+                "resolve 缺檔 %d：%s", len(missing),
+                "、".join(redact.mask_segment(Path(m).name) for m in missing),
+            )
 
         taken_date, rtype, subtype, src = _filing_params(item["kind"], payload)
         batch_key = payload.get("batch_key")

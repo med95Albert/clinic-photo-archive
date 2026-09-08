@@ -74,10 +74,13 @@ python run.py
   8 字元）換掉，再刪除這個檔案——改密後該帳號在其他裝置的登入全部失效，明碼檔即使外流也
   無法再用。同仁忘記密碼由管理員在「帳號」頁重設；管理員本人忘記時在伺服器主控台執行
   `python run.py --set-password admin`（提示輸入、不回顯、不啟動服務）。
-- **log 遮罩**：`integration.log` 與主控台輸出中的證號一律遮成 `A12345****`、暫時代號遮成
-  `P-123****`（含 uvicorn 存取 log 的 URL、搬檔失敗的路徑、批次鍵）；inbox 檔名只印雜湊。
-  部署 runbook 允許現場 agent 讀 log 排錯，這層遮罩是「病人資料不入對話」的機械保證。
-  若在 log 看到未遮罩的證號或姓名，那是 bug，請回報。
+- **log 淨化**：`integration.log` 與主控台輸出一律經 `clinic_archive/redact.py`：證號遮成
+  `A12345****`、暫時代號 `P-123****`；工作資料夾（inbox/review/trash/staging/archive）底下
+  非系統產生的檔名（可能含姓名）換成 `h<雜湊>.jpg`，traceback 裡的路徑也一樣；網址 query 值
+  一律 `<redacted>`。uvicorn 存取 log 整個關閉（誰看了什麼由稽核表負責）。
+  要讀任何 log（含 ClinicSnap 的 `clinic_snap.log`）請一律經淨化器：
+  `python -m clinic_archive.redact <log 路徑> --tail 200`。淨化器認得的是結構化識別碼、
+  路徑與 query，自由文字裡的姓名認不出——若仍看到疑似姓名，那是 bug，請回報。
 - 預設監聽 `http://0.0.0.0:8770`（可在 `config.json` 調整 `web_host`/`web_port`）。
 - 停止：`Ctrl+C`（SIGINT）或送 SIGTERM，watcher 執行緒與 web 服務會一併優雅停止。
 - 指定設定檔位置：`python run.py --config /path/to/config.json`（或

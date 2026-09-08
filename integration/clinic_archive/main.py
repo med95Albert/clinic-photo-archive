@@ -102,10 +102,13 @@ def run(config_path: str | Path = "config.json") -> None:
 
         app = create_app(cfg)
         logger.info("web 服務啟動於 http://%s:%s", cfg.web_host, cfg.web_port)
-        # log_config=None：不讓 uvicorn 掛自己的 handler，uvicorn.* logger 會往 root
-        # propagate，存取 log（GET /p/A123456789 …）才會經過 MaskingFormatter 遮罩。
+        # log_config=None：不讓 uvicorn 掛自己的 handler，uvicorn.error 往 root propagate
+        # 才會經過 MaskingFormatter。access_log=False：存取 log 會把 /patients?q=<姓名>、
+        # /p/<證號> 這類網址逐筆寫盤，對排錯幫助小、對「病人資料不入 log」是純風險；
+        # 誰看了什麼由 audit 表負責，不靠存取 log。
         uvicorn.run(
-            app, host=cfg.web_host, port=cfg.web_port, log_level="info", log_config=None
+            app, host=cfg.web_host, port=cfg.web_port, log_level="info",
+            log_config=None, access_log=False,
         )
     finally:
         # uvicorn.run 返回（含 SIGINT 觸發的優雅關閉）後，確保 watcher 一併收束。
