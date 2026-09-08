@@ -302,7 +302,7 @@ Test-Path C:\ClinicArchive\clinic_data\FIRST_RUN_ADMIN.txt                    # 
 - [ ] BitLocker 已開、金鑰已收妥
 - [ ] `FIRST_RUN_ADMIN.txt` 已改密並刪除（Step 5c）
 
-三項全勾 → 做完整驗收表（1–6）。**任一項未勾** → 只做 1、2、6，**3–5 改用合成資料**（`.\.venv\Scripts\python contract_test.py --simulate` 產生的樣本，或 `pytest tests\test_pipeline_e2e.py`），完成報告標「**部分驗收：待網路控制到位後補真卡／真報告測試**」並回報 Albert 啟動 TLS 提前方案。不要因為「只是測一下」就先拍真卡。
+網路三控制做不到時，改做 `deploy\TLS_EARLY.md`（TLS 反向代理提前方案），其 §8 驗證清單全過即可視同第一項已勾。三項全勾 → 做完整驗收表（1–6）。**任一項未勾** → 只做 1、2、6，**3–5 改用合成資料**（`.\.venv\Scripts\python contract_test.py --simulate` 產生的樣本，或 `pytest tests\test_pipeline_e2e.py`），完成報告標「**部分驗收：待網路控制到位後補真卡／真報告測試**」並回報 Albert 啟動 TLS 提前方案。不要因為「只是測一下」就先拍真卡。
 
 ### 6b｜驗收表
 
@@ -320,7 +320,7 @@ Test-Path C:\ClinicArchive\clinic_data\FIRST_RUN_ADMIN.txt                    # 
 部署報告最後附這張表（agent 驗不了的實體項，請人類勾）：
 
 - [ ] 伺服器固定 IP（DHCP 保留）已設
-- [ ] 員工 SSID 已用 WPA3-SAE；AP client isolation 已開並**實測**（手機→伺服器通、手機→手機不通）；路由器 ACL 限員工 SSID 只達伺服器──**任一項做不到，先不要放真病人資料，回報 Albert 啟動 TLS 提前方案**（architecture §8）
+- [ ] 員工 SSID 已用 WPA3-SAE；AP client isolation 已開並**實測**（手機→伺服器通、手機→手機不通）；路由器 ACL 限員工 SSID 只達伺服器──**任一項做不到，先不要放真病人資料，改做 `deploy\TLS_EARLY.md` 的 TLS 提前方案並回報 Albert**（architecture §8）
 - [ ] BitLocker 已開、金鑰已收妥
 - [ ] QR 已印、只貼員工區
 - [ ] 同意書臨床攝影條款、員工守則增補已生效
