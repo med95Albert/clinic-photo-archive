@@ -65,6 +65,7 @@
     }
     button.btn.danger { background: #a4373a; }
     button.btn.secondary { background: #52616b; }
+    .notice { background:#e6f4ea; border:1px solid #9ccc9c; padding:.6em .9em; margin:.6em 0; border-radius:4px; }
     .error { background: #fdecea; color: #a4373a; border: 1px solid #f3c2bf; padding: 0.5rem 0.7rem; border-radius: 6px; margin-bottom: 0.8rem; }
     .empty { color: #6b7680; padding: 1rem 0; }
   </style>
@@ -79,6 +80,7 @@
     <a href="/users">帳號</a>
     <a href="/audit">稽核</a>
     {% endif %}
+    <a href="/password">改密碼</a>
     <span class="muted">{{ user.username }}（{{ "管理員" if user.role == "manager" else "檢視者" }}）</span>
     <form method="post" action="/logout">
       <input type="hidden" name="csrf" value="{{ user.csrf }}">

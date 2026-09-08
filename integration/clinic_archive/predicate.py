@@ -96,10 +96,17 @@ def _resolve_pid(conn: sqlite3.Connection, pid: str):
     return None, "手機端身份代碼無法解析"
 
 
-def _checksum_candidates(ids: list[str]) -> set[str]:
-    """OCR 證號中通過 checksum 的候選集合（去重）。"""
-    tid = _tid()
-    return {i for i in ids if tid.verify_checksum(i)}
+def _distinct_candidates(ids: list[str]) -> set[str]:
+    """OCR 證號「格式層」候選集合（去重，**不先過濾 checksum**）。
+
+    恰一原則（architecture §4 第 1 條）在**格式層**計數：任何 ``[A-Z][0-9]{9}``
+    候選都算一個證號，未通過檢查碼的也算。之前的作法是先濾掉 checksum 不過的
+    候選再數，結果「一張文件上有兩位病人，其中一位的證號被 OCR 誤讀一碼」會被
+    當成恰一而自動歸給另一位（跨模型審查 2026-09-09 實證重現）。代價是報告上
+    形如「字母＋9 位數」的檢體／報告編號會讓該份報告進佇列——這是 fail-closed
+    的刻意選擇，v1 若實測佇列量過高再加可設定的雜訊白名單。
+    """
+    return {i for i in ids if i}
 
 
 def decide_photo_batch(
@@ -128,15 +135,17 @@ def decide_photo_batch(
         if reason is not None:
             return Verdict(False, None, reason)
 
-    # 3) 候選證號 = 全批各圖 OCR 中通過 checksum 者的聯集。恰一原則。
+    # 3) 候選證號 = 全批各圖 OCR 格式層候選的聯集（去重、不先濾 checksum）。恰一原則。
     all_ids = [i for img in images for i in img.ids]
-    candidates = _checksum_candidates(all_ids)
+    candidates = _distinct_candidates(all_ids)
     if len(candidates) > 1:
         return Verdict(False, None, "批內多個證號")
 
-    # 4) 恰一證號。
+    # 4) 恰一證號 → 才驗 checksum（§4 第 2 條），再驗已建檔與第二驗證。
     if len(candidates) == 1:
         cid = next(iter(candidates))
+        if not _tid().verify_checksum(cid):
+            return Verdict(False, None, "證號未通過檢查碼")
         patient = _get_patient(conn, cid)
         if patient is None:
             # 首見證號一律人工建檔（§4 第 3 層防呆）。
@@ -183,13 +192,15 @@ def decide_photo_batch(
 
 def decide_report(conn: sqlite3.Connection, fields: "ReportFields") -> Verdict:
     """檢驗報告判準（architecture §4）——報告必有生日，生日必查。"""
-    candidates = _checksum_candidates(list(fields.ids))
+    candidates = _distinct_candidates(list(fields.ids))
     if len(candidates) == 0:
         return Verdict(False, None, "報告無有效證號")
     if len(candidates) > 1:
         return Verdict(False, None, "報告內多個證號")
 
     cid = next(iter(candidates))
+    if not _tid().verify_checksum(cid):
+        return Verdict(False, None, "報告證號未通過檢查碼")
     patient = _get_patient(conn, cid)
     if patient is None:
         return Verdict(False, None, "首見證號")

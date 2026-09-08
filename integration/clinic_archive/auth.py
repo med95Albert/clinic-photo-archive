@@ -24,6 +24,8 @@ _SCRYPT_SALT_BYTES = 16
 _SCRYPT_SCHEME = "scrypt"
 
 FIRST_RUN_ADMIN_FILENAME = "FIRST_RUN_ADMIN.txt"
+# 改密／重設密碼的最短長度（初始 admin 密碼 token_urlsafe(9) 為 12 字元，天然符合）。
+MIN_PASSWORD_LEN = 8
 
 # icacls 逾時（秒）：只是收緊 ACL，卡住不值得擋住首次啟動。
 _ICACLS_TIMEOUT = 10
@@ -128,6 +130,21 @@ def ensure_initial_admin(conn: sqlite3.Connection, data_root: str | Path) -> Non
         logger.warning(
             "Windows 上此檔無完整權限保護，讀完立即刪除：%s", admin_file
         )
+
+
+def set_password(
+    conn: sqlite3.Connection, username: str, new_pw: str, keep_token: str | None = None
+) -> None:
+    """更新密碼並讓該帳號的其他 session 全部失效（``keep_token``＝操作者目前這個 session，可保留）。
+
+    web 自助改密、管理員重設、主控台 ``--set-password`` 三條路都走這裡：
+    密碼一換，舊憑證就不能再用，否則「刪掉明碼密碼檔」只是心理安慰。
+    """
+    if len(new_pw) < MIN_PASSWORD_LEN:
+        raise ValueError(f"密碼至少 {MIN_PASSWORD_LEN} 個字元")
+    if not db.update_password(conn, username, hash_pw(new_pw)):
+        raise LookupError(f"帳號不存在：{username}")
+    db.delete_sessions_for_user(conn, username, keep_token=keep_token)
 
 
 def new_session(conn: sqlite3.Connection, username: str, hours: float) -> str:

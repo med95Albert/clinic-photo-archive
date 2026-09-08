@@ -31,6 +31,8 @@ import shutil
 import sqlite3
 import threading
 import time
+
+from . import redact
 from pathlib import Path
 from typing import Any
 
@@ -116,12 +118,14 @@ def _replace_with_retry(src: Path, dest: Path) -> None:
             if attempt == _MOVE_RETRY_ATTEMPTS:
                 logger.warning(
                     "搬移 %s → %s 連續 %d 次被鎖住，放棄重試：%s",
-                    src, dest, _MOVE_RETRY_ATTEMPTS, e,
+                    redact.mask_text(str(src)), redact.mask_text(str(dest)),
+                    _MOVE_RETRY_ATTEMPTS, e,
                 )
                 raise
             logger.debug(
                 "搬移 %s → %s 被鎖住（第 %d/%d 次），稍後重試：%s",
-                src, dest, attempt, _MOVE_RETRY_ATTEMPTS, e,
+                redact.mask_text(str(src)), redact.mask_text(str(dest)),
+                attempt, _MOVE_RETRY_ATTEMPTS, e,
             )
             time.sleep(_MOVE_RETRY_BASE_SLEEP * attempt)
 

@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS audit(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts TEXT DEFAULT (datetime('now','localtime')),
   actor TEXT NOT NULL,                 -- 帳號 或 'system'
-  action TEXT NOT NULL,                -- login|view_timeline|view_file|auto_file|queue|resolve|merge|reassign|create_user|delete_card
+  action TEXT NOT NULL,                -- login|view_timeline|view_file|auto_file|queue|resolve|merge|reassign|create_user|change_password|reset_password|delete_card
   patient_key TEXT, detail TEXT);
 CREATE INDEX IF NOT EXISTS idx_records_patient ON records(patient_key, taken_date);
 """
@@ -326,6 +326,29 @@ def get_user(conn: sqlite3.Connection, username: str) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM users WHERE username = ?", (username,)
     ).fetchone()
+
+
+def update_password(conn: sqlite3.Connection, username: str, pwhash: str) -> bool:
+    """更新密碼雜湊；回傳是否真的改到一列（帳號不存在 → False）。"""
+    cur = conn.execute(
+        "UPDATE users SET pwhash = ? WHERE username = ?", (pwhash, username)
+    )
+    conn.commit()
+    return cur.rowcount == 1
+
+
+def delete_sessions_for_user(
+    conn: sqlite3.Connection, username: str, keep_token: str | None = None
+) -> int:
+    """刪除某帳號的 session（改密／重設密碼後讓舊登入失效）；``keep_token`` 可保留目前這一個。"""
+    if keep_token:
+        cur = conn.execute(
+            "DELETE FROM sessions WHERE username = ? AND token <> ?", (username, keep_token)
+        )
+    else:
+        cur = conn.execute("DELETE FROM sessions WHERE username = ?", (username,))
+    conn.commit()
+    return cur.rowcount
 
 
 def create_session(conn: sqlite3.Connection, token: str, username: str, hours: float) -> str:

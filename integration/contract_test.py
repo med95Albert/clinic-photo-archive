@@ -51,6 +51,7 @@ if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 
 from clinic_archive.batching import FILE_RE  # noqa: E402
+from clinic_archive.redact import mask_text  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -105,9 +106,10 @@ class ClauseResult:
 
 
 def _fmt_names(paths: list[Path], limit: int = 8) -> str:
+    # 輸出會被現場 agent 讀進對話：名稱一律遮罩證號（A12345****）。
     if not paths:
         return "（無）"
-    names = [p.name for p in paths[:limit]]
+    names = [mask_text(p.name) for p in paths[:limit]]
     more = f"（其餘 {len(paths) - limit} 個略）" if len(paths) > limit else ""
     return "、".join(names) + more
 
@@ -177,7 +179,7 @@ def _check_sequence_contiguous(walk: _Walk) -> ClauseResult:
             expected = list(range(1, len(items) + 1))
             if idxs != expected:
                 bad_groups.append(
-                    f"{dir_path.name}/{date}_{tm}（{len(items)} 個檔案）"
+                    f"{mask_text(dir_path.name)}/{date}_{tm}（{len(items)} 個檔案）"
                     f"實際序號={idxs}，預期={expected}"
                 )
     passed = not bad_groups
@@ -236,13 +238,13 @@ def _check_top_level_layout(walk: _Walk) -> ClauseResult:
             f"（應放在病患代碼資料夾或 _unsorted 底下）：{_fmt_names(walk.root_loose_files)}"
         )
     for dir_path, subdirs in walk.nested_subdirs.items():
-        problems.append(f"{dir_path.name}/ 底下有巢狀子資料夾（應只有一層）：{_fmt_names(subdirs)}")
+        problems.append(f"{mask_text(dir_path.name)}/ 底下有巢狀子資料夾（應只有一層）：{_fmt_names(subdirs)}")
     for dir_path in walk.top_dirs:
         if not dir_path.name.strip():
             problems.append("發現名稱為空白的第一層資料夾")
 
     passed = not problems
-    names = [d.name for d in walk.top_dirs]
+    names = [mask_text(d.name) for d in walk.top_dirs]  # 遮罩：輸出會進 agent 對話
     evidence = [f"第一層資料夾（{len(walk.top_dirs)} 個）：" + ("、".join(names) if names else "（無）")]
     if problems:
         evidence.extend(problems)

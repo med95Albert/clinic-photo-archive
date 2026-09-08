@@ -18,7 +18,7 @@
 
 1. **每一步做完必須驗證通過才能進下一步**；驗證失敗 → 先診斷，同法失敗兩次就停下來，把狀況整理給人類。
 2. **fail-closed**：任何不確定（路徑、既有檔案、防毒攔截）→ 停下問人，不猜、不硬繞。
-3. **絕不讀取病人資料入對話**：`clinic_data\` 底下的 `archive\`、`review\`、`staging\`、`inbox\`、`trash\` 內容一律不 cat/type/開檔；`clinic.db` 不 SELECT 病人列。日誌檔（`integration.log`、`clinic_snap.log`）可以讀。
+3. **絕不讀取病人資料入對話**：`clinic_data\` 底下的 `archive\`、`review\`、`staging\`、`inbox\`、`trash\` 內容一律不 cat/type/開檔；`clinic.db` 不 SELECT 病人列。`integration.log` 可以讀——整合層寫 log 前已把證號遮成 `A12345****`、暫時代號遮成 `P-123****`、inbox 檔名只印雜湊；**若在 log 裡看到未遮罩的證號或姓名，立刻停止讀取、回報為 bug**。ClinicSnap 的 `clinic_snap.log` 是上游程式寫的、未經遮罩：只准 `Select-String -Pattern 'error|exception|失敗|fail'` 抓錯誤行，**不得整檔 type**。`contract_test.py` 的輸出已遮罩，可以貼。
 4. **密碼不落對話**：`FIRST_RUN_ADMIN.txt` 的內容不得印出——只告訴人類檔案路徑，請他自己開。
 5. **不越界**：不碰 HIS、不裝清單外軟體、不改系統安全設定（防火牆規則除外，且要人類看到並同意）、不啟用 ClinicSnap 的網際網路（tunnel）模式。
 6. 需要系統管理員權限的步驟（防火牆、winget 裝軟體），先明講再請人類允許 UAC。
@@ -278,7 +278,7 @@ Test-Path C:\ClinicArchive\clinic_data\FIRST_RUN_ADMIN.txt                    # 
 > 用 `127.0.0.1` 而不是 `localhost`：`localhost` 在 Windows 常先解析到 IPv6 的 `::1`，
 > 而服務綁的是 IPv4，於是連不上——是解析問題，不是服務沒起來，卻很容易被誤判成失敗。
 
-然後**告訴人類**：「admin 首次密碼在 `C:\ClinicArchive\clinic_data\FIRST_RUN_ADMIN.txt`，請你自己開瀏覽器 `http://127.0.0.1:8770` 登入 → 建立每位同仁帳號（管理者/一般）→ **讀完立刻刪除該密碼檔**」。不要替他讀出內容。
+然後**告訴人類**：「admin 首次密碼在 `C:\ClinicArchive\clinic_data\FIRST_RUN_ADMIN.txt`，請你自己開瀏覽器 `http://127.0.0.1:8770` 登入 → 右上角「改密碼」換掉 admin 密碼（至少 8 字元；改完其他裝置的 admin 登入會全部失效）→ 建立每位同仁帳號（管理者/一般）→ **刪除該密碼檔**」。不要替他讀出內容。日後同仁忘記密碼：管理員在「帳號」頁重設；admin 本人忘記：在伺服器主控台 `cd C:\ClinicArchive\repo\integration` 後執行 `.\.venv\Scripts\python run.py --config C:\ClinicArchive\config.json --set-password admin`（提示輸入、不回顯；這一步由人類自己敲，agent 不代打）。
 
 > **⚠️ `FIRST_RUN_ADMIN.txt` 在 Windows 上沒有權限保護。**
 > 程式會盡力收緊權限，但那是 best-effort：只要這台機器上有其他帳號、或資料夾被分享／被備份到
@@ -294,13 +294,25 @@ Test-Path C:\ClinicArchive\clinic_data\FIRST_RUN_ADMIN.txt                    # 
 > 表中用到 `$exeDir` 的那格，一樣必須在 Step 4 的偵測指令跑過的**同一個視窗**執行；換了視窗先重跑那兩行。
 > 連通性一律測 `127.0.0.1` 不測 `localhost`（`localhost` 會解析到 `::1` 而誤報失敗）。
 
+### 6a｜隱私前提閘門（**先做，過了才准用真資料**）
+
+驗收表的 3–5 會用到真的健保卡與真的檢驗報告；在下列控制**確認到位之前**，任何真實身份資料都不得經過這套系統（手機 → 伺服器目前是明文 HTTP，architecture §8）。請人類逐項回答，你只記錄、不代答：
+
+- [ ] 員工 SSID 已用 WPA3-SAE；AP client isolation 已開並**實測**（手機→伺服器通、手機→手機不通）；路由器 ACL 限員工 SSID 只達伺服器
+- [ ] BitLocker 已開、金鑰已收妥
+- [ ] `FIRST_RUN_ADMIN.txt` 已改密並刪除（Step 5c）
+
+三項全勾 → 做完整驗收表（1–6）。**任一項未勾** → 只做 1、2、6，**3–5 改用合成資料**（`.\.venv\Scripts\python contract_test.py --simulate` 產生的樣本，或 `pytest tests\test_pipeline_e2e.py`），完成報告標「**部分驗收：待網路控制到位後補真卡／真報告測試**」並回報 Albert 啟動 TLS 提前方案。不要因為「只是測一下」就先拍真卡。
+
+### 6b｜驗收表
+
 | # | 測什麼 | 指令/動作 | 過關 |
 |---|---|---|---|
 | 1 | 兩服務在聽 | `Test-NetConnection 127.0.0.1 -Port 8756`、`Test-NetConnection 127.0.0.1 -Port 8770` | 皆 TcpTestSucceeded True |
-| 2 | 契約（真實輸出） | 請人類用手機掃 QR 拍 2 張測試照送出後：`.\.venv\Scripts\python contract_test.py C:\ClinicArchive\clinic_data\staging --config (Join-Path $exeDir "config.json")` | `CONTRACT: PASS`、無 archiveMode 警告 |
-| 3 | 端到端首批 | 人類照 N0 協定（先拍卡再拍患部）用自己的健保卡實拍一批 | 首見證號**進佇列**（設計如此）→ 人類在網頁確認建檔 → `archive\` 出現資料夾 |
-| 4 | 自動歸檔 | 同一張卡再拍第二批 | 這批自動歸檔、時間軸可見 |
-| 5 | 報告流 | 人類從 LINE 拖一張報告圖進 `clinic_data\inbox\` | 進佇列或自動歸檔，佇列頁欄位正確 |
+| 2 | 契約（真實輸出，**不含身份資料**） | 請人類用手機掃 QR，**不輸入任何病患代碼、不拍卡**，對白紙或桌面拍 2 張送出後：`.\.venv\Scripts\python contract_test.py C:\ClinicArchive\clinic_data\staging --config (Join-Path $exeDir "config.json")` | `CONTRACT: PASS`、無 archiveMode 警告（輸出已遮罩，可貼） |
+| 3 | 端到端首批（**需 6a 全勾**） | 人類照 N0 協定（先拍卡再拍患部）用自己的健保卡實拍一批 | 首見證號**進佇列**（設計如此）→ 人類在網頁確認建檔 → `archive\` 出現資料夾 |
+| 4 | 自動歸檔（**需 6a 全勾**） | 同一張卡再拍第二批 | 這批自動歸檔、時間軸可見 |
+| 5 | 報告流（**需 6a 全勾**） | 人類從 LINE 拖一張報告圖進 `clinic_data\inbox\` | 進佇列或自動歸檔，佇列頁欄位正確 |
 | 6 | 重開機演練 | 重開機 → 自動登入 → 兩服務自動起來 | 步驟 1 重測通過 |
 
 ## Step 7｜輸出「人類實體清單」並收工

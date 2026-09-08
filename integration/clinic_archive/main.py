@@ -17,7 +17,7 @@ import signal
 import threading
 from pathlib import Path
 
-from . import archiver, auth, config, db, watcher
+from . import archiver, auth, config, db, redact, watcher
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,9 @@ def _setup_logging(cfg) -> None:
     log_path = Path(cfg.data_root) / LOG_FILENAME
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    # 遮罩格式器：log 會被現場 agent 讀進對話（runbook 鐵律 3），證號／暫時代號一律遮成
+    # A12345****／P-123****；連 uvicorn 存取 log（URL 內含病人代碼）也走這裡（見 run()）。
+    fmt = redact.MaskingFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     file_handler = logging.handlers.RotatingFileHandler(
         log_path, maxBytes=2_000_000, backupCount=3, encoding="utf-8"
     )
@@ -100,7 +102,11 @@ def run(config_path: str | Path = "config.json") -> None:
 
         app = create_app(cfg)
         logger.info("web 服務啟動於 http://%s:%s", cfg.web_host, cfg.web_port)
-        uvicorn.run(app, host=cfg.web_host, port=cfg.web_port, log_level="info")
+        # log_config=None：不讓 uvicorn 掛自己的 handler，uvicorn.* logger 會往 root
+        # propagate，存取 log（GET /p/A123456789 …）才會經過 MaskingFormatter 遮罩。
+        uvicorn.run(
+            app, host=cfg.web_host, port=cfg.web_port, log_level="info", log_config=None
+        )
     finally:
         # uvicorn.run 返回（含 SIGINT 觸發的優雅關閉）後，確保 watcher 一併收束。
         stop_event.set()
@@ -108,12 +114,57 @@ def run(config_path: str | Path = "config.json") -> None:
         logger.info("整合層已停止")
 
 
+def set_password_cli(config_path: str | Path, username: str, *, getpass_fn=None) -> int:
+    """主控台重設密碼（管理員本人忘記密碼時的最後手段；由人在伺服器前操作）。
+
+    提示輸入兩次、不回顯、不印出密碼；成功後該帳號所有既有登入失效。不啟動服務。
+    找不到既有資料庫就拒絕（避免 --config 指錯路徑時默默建出一套新資料庫）。
+    """
+    import getpass
+
+    ask = getpass_fn or getpass.getpass
+    cfg = config.load_config(config_path)
+    if not Path(cfg.db_path).is_file():
+        print(f"找不到資料庫：{cfg.db_path}（--config 是否指向正確的設定檔？）")
+        return 2
+    conn = db.connect(cfg.db_path)
+    try:
+        db.init_db(conn)
+        if db.get_user(conn, username) is None:
+            print(f"帳號不存在：{username}")
+            return 2
+        pw1 = ask(f"{username} 的新密碼（至少 {auth.MIN_PASSWORD_LEN} 個字元）：")
+        pw2 = ask("再輸入一次：")
+        if pw1 != pw2:
+            print("兩次輸入不一致，未變更。")
+            return 1
+        try:
+            auth.set_password(conn, username, pw1)
+        except ValueError as exc:
+            print(f"未變更：{exc}")
+            return 1
+        db.add_audit(
+            conn, actor="console", action="reset_password",
+            detail=f"主控台重設 {username} 的密碼（其登入已全部失效）",
+        )
+    finally:
+        conn.close()
+    print(f"已更新 {username} 的密碼；該帳號所有既有登入已失效，請重新登入。")
+    return 0
+
+
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description="診所照片與檢驗報告歸檔整合層 v0")
     parser.add_argument(
         "--config", default="config.json", help="設定檔路徑（不存在則建立預設並寫回）"
     )
+    parser.add_argument(
+        "--set-password", metavar="USERNAME",
+        help="在主控台重設某帳號的密碼（提示輸入、不回顯；該帳號所有登入失效）後結束，不啟動服務",
+    )
     args = parser.parse_args(argv)
+    if args.set_password:
+        raise SystemExit(set_password_cli(args.config, args.set_password))
     run(args.config)
 
 

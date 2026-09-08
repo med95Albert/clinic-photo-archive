@@ -7,7 +7,7 @@
 - Python 3.11+，跨平台（開發 macOS、部署 Windows）；一律 `pathlib`，禁止寫死絕對路徑與 `\` 字串拼接。
 - 依賴白名單：stdlib、`fastapi`、`uvicorn`、`jinja2`、`python-multipart`、`rapidocr`、`onnxruntime`、`pillow`。測試另可用 `pytest`、`httpx`。**不得**新增其他依賴。
 - 密碼雜湊用 `hashlib.scrypt`（stdlib）；資料庫用 `sqlite3`（stdlib，WAL mode）。
-- UI 與使用者可見字串一律繁體中文；log 用 `logging`（rotating，`integration.log`）。
+- UI 與使用者可見字串一律繁體中文；log 用 `logging`（rotating，`integration.log`）。**所有 log／主控台／契約測試輸出一律經 `redact.py` 遮罩**（證號 `A12345****`、暫時代號 `P-123****`；inbox 檔名只印雜湊）——部署 runbook 允許現場 agent 讀 log，遮罩是「病人資料不入對話」的機械保證。`main._setup_logging` 掛 `redact.MaskingFormatter`，`uvicorn.run(..., log_config=None)` 讓存取 log 也走同一格式器；直接印路徑／批次鍵的站點另以 `redact.mask_text` 顯式遮罩（雙保險）。
 - 所有「搬檔」動作：同磁碟用 `os.replace`；目的檔已存在時加 `-2`、`-3` 後綴（模仿上游慣例）；搬移前確保目的資料夾存在。
 - **fail-closed 鐵律**：任何解析失敗、狀態不明、判準不滿足 → 進佇列，絕不猜、絕不刪、絕不覆蓋。
 - 佇列化的檔案實體移到 `review/` 下（保留原名，衝突加後綴），佇列項記錄其現位置。
@@ -158,6 +158,7 @@ DAO 語意注意（與判準安全直接相關，不得簡化）：
 - `hash_pw(pw)` / `verify_pw(pw, stored)`：scrypt n=2**14 r=8 p=1，格式 `scrypt$<salt_hex>$<hash_hex>`。
 - `ensure_initial_admin(conn, data_root)`：users 空 → 建 `admin`＋`secrets.token_urlsafe(9)` 密碼，寫入 `{data_root}/FIRST_RUN_ADMIN.txt`（提示登入後改密與刪檔）並 log。該檔權限**盡力**收到「只有目前使用者可讀」：POSIX 走 `os.chmod(0o600)`；Windows 上 `os.chmod` 對 ACL 是 no-op，改以 `icacls /inheritance:r /grant:r <user>:R` 收緊。收緊失敗（icacls 不存在／逾時／非 NTFS／權限不足）只記警告，**不中斷首次啟動**——「權限收不緊就完全開不了機」比留一個權限較寬的檔案更糟；Windows 上另 log 一則「讀完立即刪除」警告。
 - `new_session(conn, username, hours)` → token（`secrets.token_urlsafe(32)`）；`check_session(conn, token)` → username|None。
+- `MIN_PASSWORD_LEN = 8`；`set_password(conn, username, new_pw, keep_token=None)`：長度不足 → `ValueError`、帳號不存在 → `LookupError`；成功＝`db.update_password` ＋ `db.delete_sessions_for_user(keep_token=…)`——**密碼一換，該帳號其他 session 立即失效**（否則刪除 `FIRST_RUN_ADMIN.txt` 只是心理安慰）。web 自助改密（`/password`）、管理員重設（`/users/reset`）、主控台 `main.set_password_cli`（`run.py --set-password USER`，`getpass` 兩次、不回顯、不啟動服務、資料庫不存在即拒絕）三條路都走它。
 
 ## 5. taiwan_id.py（T1）
 
@@ -255,9 +256,12 @@ def decide_report(conn, fields: ReportFields) -> Verdict
    `pcode`→患者需存在，否則 queue('暫時代號查無此人')；
    `chart_no`→`find_patients_by_chart`，**命中數恰為 1** 才可據以歸檔，0 筆或重號一律
    queue('病歷號對應不唯一或不存在')；`invalid`→queue('手機端身份代碼無法解析')。
-3. 候選證號 = 全批各圖 `ids` 中通過 checksum 者的**聯集**（去重）。**恰一原則**：
-   len>1 → queue('批內多個證號')。
-4. len==1（cid＝該證號）：未建檔 → queue('首見證號')。已建檔則依序：
+3. 候選證號 = 全批各圖 `ids` 的**格式層聯集**（去重，**不先濾 checksum**）。**恰一原則**
+   （architecture §4 第 1 條）：len>1 → queue('批內多個證號')。未過檢查碼的候選也算一個——
+   跨模型審查 2026-09-09 實證：先濾再數會讓「兩人同框、其中一位證號被誤讀一碼」被當恰一而歸給
+   另一位。代價是形如字母＋9 位數的檢體／報告編號會讓報告進佇列（刻意 fail-closed）。
+4. len==1（cid＝該證號）：**先驗 checksum**，不過 → queue('證號未通過檢查碼')；未建檔 →
+   queue('首見證號')。已建檔則依序：
    - **批內第二張（含以後）出現任何卡片影像** → queue('卡片非首張或多卡影像需人工')。
      此檢查**無條件優先**於下面所有放行分支：即使首張卡驗證全數通過，後方的卡仍可能屬於
      另一位病人（A 卡首張全吻合＋B 卡在後 → 整批誤歸 A）。
@@ -274,8 +278,9 @@ def decide_report(conn, fields: ReportFields) -> Verdict
    queue('無卡批需人工一鍵確認')
    （§4：無複掃證號可比對，fail closed）；連 pid 都沒有 → queue('無任何身份線索')。
 
-報告分支（`decide_report`）：零證號 → queue('報告無有效證號')；多證號 → queue('報告內多個證號')；
-恰一但未建檔 → queue('首見證號')；**報告必有生日、生日必查**——`fields.dob` 缺 →
+報告分支（`decide_report`）：零證號 → queue('報告無有效證號')；多證號（格式層計數，同上）→
+queue('報告內多個證號')；恰一但檢查碼不過 → queue('報告證號未通過檢查碼')；恰一但未建檔 →
+queue('首見證號')；**報告必有生日、生日必查**——`fields.dob` 缺 →
 queue('報告缺生日')，建檔資料缺生日 → queue('建檔資料缺生日，無法交叉核對')，吻合 → **auto**
 ('報告證號已建檔＋生日吻合')，不吻合 → queue('生日不符')。
 
@@ -392,6 +397,8 @@ GET  /p/{key}     → 時間軸：records 依日分組、縮圖、audit('view_ti
 GET  /file/{record_id} → 送檔（audit('view_file')；只准 records 內路徑）    viewer+
 GET  /review-file?path= 禁止——一律經 queue 詳情的受控路由（防路徑穿越）
 GET  /users、POST /users → 建帳號                                        manager
+POST /users/reset → 管理員重設任一帳號密碼（該帳號 session 全失效；重設自己則保留本 session）manager
+GET  /password、POST /password → 自助改密（驗目前密碼、新密碼 ≥8、兩次一致；其他裝置 session 失效） viewer+
 GET  /audit       → 最近 500 筆                                          manager
 ```
 

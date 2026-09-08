@@ -30,4 +30,18 @@
   <br>
   <button class="btn" type="submit">建立帳號</button>
 </form>
+
+<h2>重設密碼</h2>
+<form class="action" method="post" action="/users/reset">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+  <label for="reset_username">帳號</label>
+  <select id="reset_username" name="username">
+    {% for u in users %}<option value="{{ u.username }}">{{ u.username }}</option>{% endfor %}
+  </select>
+  <label for="reset_password">新密碼（至少 8 個字元）</label>
+  <input id="reset_password" name="new_password" type="password" autocomplete="new-password" minlength="8" required>
+  <br>
+  <button class="btn" type="submit">重設密碼</button>
+</form>
+<p class="muted">重設後，該帳號在所有裝置的登入立即失效；同仁自己改密碼請用右上「改密碼」。</p>
 {% endblock %}

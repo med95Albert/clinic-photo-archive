@@ -70,7 +70,14 @@ python run.py
   `review/` 底下的實體檔與 DB／佇列索引，把上次非正常關機遺留的孤兒檔掛回佇列供
   人工複核；統計筆數寫進 `integration.log`）。
 - **初始管理員密碼**寫在 `{data_root}/FIRST_RUN_ADMIN.txt`（帳號固定 `admin`，密碼明碼
-  存在檔案裡）。登入後請盡快改密碼並刪除這個檔案。
+  存在檔案裡）。登入後請立刻用右上角「改密碼」（`/password`，需輸入目前密碼、新密碼至少
+  8 字元）換掉，再刪除這個檔案——改密後該帳號在其他裝置的登入全部失效，明碼檔即使外流也
+  無法再用。同仁忘記密碼由管理員在「帳號」頁重設；管理員本人忘記時在伺服器主控台執行
+  `python run.py --set-password admin`（提示輸入、不回顯、不啟動服務）。
+- **log 遮罩**：`integration.log` 與主控台輸出中的證號一律遮成 `A12345****`、暫時代號遮成
+  `P-123****`（含 uvicorn 存取 log 的 URL、搬檔失敗的路徑、批次鍵）；inbox 檔名只印雜湊。
+  部署 runbook 允許現場 agent 讀 log 排錯，這層遮罩是「病人資料不入對話」的機械保證。
+  若在 log 看到未遮罩的證號或姓名，那是 bug，請回報。
 - 預設監聽 `http://0.0.0.0:8770`（可在 `config.json` 調整 `web_host`/`web_port`）。
 - 停止：`Ctrl+C`（SIGINT）或送 SIGTERM，watcher 執行緒與 web 服務會一併優雅停止。
 - 指定設定檔位置：`python run.py --config /path/to/config.json`（或

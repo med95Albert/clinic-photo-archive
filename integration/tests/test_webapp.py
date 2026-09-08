@@ -1083,3 +1083,134 @@ def test_ghost_partial_intent_is_voided(env):
     n = conn.execute("SELECT COUNT(*) AS n FROM patients").fetchone()["n"]
     conn.close()
     assert n == 1
+
+
+# ---------------------------------------------------------------------------
+# 改密碼（自助）＋ 管理員重設 ＋ 主控台重設（跨模型審查 2026-09-09：原本無任何改密機制）
+# ---------------------------------------------------------------------------
+
+
+def _session_count(env, username):
+    conn = _conn(env)
+    n = conn.execute("SELECT COUNT(*) AS n FROM sessions WHERE username=?", (username,)).fetchone()["n"]
+    conn.close()
+    return n
+
+
+def test_password_page_requires_login(env):
+    resp = TestClient(env.app).get("/password", follow_redirects=False)
+    assert resp.status_code == 302 and resp.headers["location"] == "/login"
+
+
+def test_change_password_wrong_current_rejected(env):
+    client = _login(env.app, "eye", "eye-pw")
+    resp = _post(env, client, "/password", {
+        "current_password": "nope", "new_password": "brand-new-1", "new_password2": "brand-new-1",
+    })
+    assert resp.status_code == 400 and "目前密碼錯誤" in resp.text
+    # 舊密碼仍有效
+    assert _login(env.app, "eye", "eye-pw")
+
+
+def test_change_password_mismatch_and_too_short_rejected(env):
+    client = _login(env.app, "eye", "eye-pw")
+    r1 = _post(env, client, "/password", {
+        "current_password": "eye-pw", "new_password": "brand-new-1", "new_password2": "brand-new-2",
+    })
+    assert r1.status_code == 400 and "不一致" in r1.text
+    r2 = _post(env, client, "/password", {
+        "current_password": "eye-pw", "new_password": "short", "new_password2": "short",
+    })
+    assert r2.status_code == 400 and "至少" in r2.text
+
+
+def test_change_password_wrong_csrf_rejected(env):
+    client = _login(env.app, "eye", "eye-pw")
+    resp = client.post("/password", data={
+        "current_password": "eye-pw", "new_password": "brand-new-1",
+        "new_password2": "brand-new-1", "csrf": "bogus",
+    }, follow_redirects=False)
+    assert resp.status_code == 403
+
+
+def test_change_password_success_invalidates_other_sessions_keeps_current(env):
+    other = _login(env.app, "eye", "eye-pw")      # 另一台裝置
+    client = _login(env.app, "eye", "eye-pw")
+    assert _session_count(env, "eye") == 2
+    resp = _post(env, client, "/password", {
+        "current_password": "eye-pw", "new_password": "brand-new-1", "new_password2": "brand-new-1",
+    })
+    assert resp.status_code == 200 and "密碼已更新" in resp.text
+    # 本 session 仍可用；另一台裝置被登出
+    assert client.get("/", follow_redirects=False).status_code == 200
+    assert other.get("/", follow_redirects=False).status_code == 302
+    assert _session_count(env, "eye") == 1
+    # 舊密碼失效、新密碼可登入
+    bad = TestClient(env.app).post("/login", data={"username": "eye", "password": "eye-pw"}, follow_redirects=False)
+    assert bad.status_code == 401
+    assert _login(env.app, "eye", "brand-new-1")
+    conn = _conn(env)
+    acts = [r["action"] for r in conn.execute("SELECT action FROM audit WHERE actor='eye'").fetchall()]
+    conn.close()
+    assert "change_password" in acts
+
+
+def test_users_reset_viewer_forbidden(env):
+    client = _login(env.app, "eye", "eye-pw")
+    resp = _post(env, client, "/users/reset", {"username": "boss", "new_password": "hijack-pw-1"})
+    assert resp.status_code == 403
+    assert _login(env.app, "boss", "boss-pw")
+
+
+def test_users_reset_by_manager_logs_target_out(env):
+    victim = _login(env.app, "eye", "eye-pw")
+    client = _login(env.app, "boss", "boss-pw")
+    resp = _post(env, client, "/users/reset", {"username": "eye", "new_password": "reset-by-boss"})
+    assert resp.status_code == 303 and resp.headers["location"] == "/users"
+    assert victim.get("/", follow_redirects=False).status_code == 302
+    assert _login(env.app, "eye", "reset-by-boss")
+    conn = _conn(env)
+    row = conn.execute("SELECT detail FROM audit WHERE action='reset_password' AND actor='boss'").fetchone()
+    conn.close()
+    assert row is not None and "eye" in row["detail"]
+
+
+def test_users_reset_self_keeps_own_session(env):
+    client = _login(env.app, "boss", "boss-pw")
+    resp = _post(env, client, "/users/reset", {"username": "boss", "new_password": "boss-new-pw"})
+    assert resp.status_code == 303
+    assert client.get("/users", follow_redirects=False).status_code == 200
+
+
+def test_users_reset_unknown_or_short_rejected(env):
+    client = _login(env.app, "boss", "boss-pw")
+    r1 = _post(env, client, "/users/reset", {"username": "ghost", "new_password": "whatever-1"})
+    assert r1.status_code == 400 and "帳號不存在" in r1.text
+    r2 = _post(env, client, "/users/reset", {"username": "eye", "new_password": "short"})
+    assert r2.status_code == 400 and "至少" in r2.text
+    assert _login(env.app, "eye", "eye-pw")
+
+
+def test_set_password_cli_resets_and_invalidates(env, tmp_path, capsys):
+    from clinic_archive import main as main_mod
+
+    cfg_path = tmp_path / "cli-config.json"
+    cfg_path.write_text(json.dumps(dataclasses.asdict(env.cfg)), encoding="utf-8")
+    victim = _login(env.app, "boss", "boss-pw")
+    answers = iter(["console-new-pw", "console-new-pw"])
+    rc = main_mod.set_password_cli(cfg_path, "boss", getpass_fn=lambda prompt="": next(answers))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "console-new-pw" not in out            # 密碼絕不印出
+    assert victim.get("/", follow_redirects=False).status_code == 302
+    assert _login(env.app, "boss", "console-new-pw")
+    # 不一致 → 未變更
+    answers2 = iter(["x-1234567", "y-1234567"])
+    assert main_mod.set_password_cli(cfg_path, "boss", getpass_fn=lambda prompt="": next(answers2)) == 1
+    assert _login(env.app, "boss", "console-new-pw")
+    # 帳號不存在 → 2
+    assert main_mod.set_password_cli(cfg_path, "nobody", getpass_fn=lambda prompt="": "irrelevant") == 2
+    conn = _conn(env)
+    row = conn.execute("SELECT actor FROM audit WHERE action='reset_password' AND actor='console'").fetchone()
+    conn.close()
+    assert row is not None

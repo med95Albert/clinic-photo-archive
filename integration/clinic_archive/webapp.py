@@ -34,7 +34,7 @@ from fastapi import APIRouter, Depends, FastAPI, Form, HTTPException, Request, s
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from . import archiver, auth, db, extract, taiwan_id
+from . import archiver, auth, db, extract, redact, taiwan_id
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +315,88 @@ def logout(request: Request, csrf: str = Form(""), conn=Depends(get_conn)):
     return resp
 
 
+# --- 改密碼（自助）＋ 管理員重設 ---------------------------------------------
+
+
+@router.get("/password")
+def password_form(request: Request, user=Depends(current_user)):
+    return _render(request, "password.html", {"user": user, "error": None, "ok": False})
+
+
+@router.post("/password")
+def password_submit(
+    request: Request,
+    current_password: str = Form(""),
+    new_password: str = Form(""),
+    new_password2: str = Form(""),
+    csrf: str = Form(""),
+    user=Depends(current_user),
+    conn=Depends(get_conn),
+):
+    """任何已登入使用者改自己的密碼：驗目前密碼 → 換雜湊 → 其他裝置的 session 全失效。"""
+    _verify_csrf(user, csrf, conn)
+    row = db.get_user(conn, user["username"])
+    error = None
+    if row is None or not auth.verify_pw(current_password, row["pwhash"]):
+        error = "目前密碼錯誤"
+    elif len(new_password) < auth.MIN_PASSWORD_LEN:
+        error = f"新密碼至少 {auth.MIN_PASSWORD_LEN} 個字元"
+    elif new_password != new_password2:
+        error = "兩次輸入的新密碼不一致"
+    elif new_password == current_password:
+        error = "新密碼不得與目前密碼相同"
+    if error:
+        db.add_audit(
+            conn, actor=user["username"], action="change_password", detail=f"改密碼失敗：{error}"
+        )
+        return _render(
+            request, "password.html", {"user": user, "error": error, "ok": False},
+            status_code=400,
+        )
+    auth.set_password(
+        conn, user["username"], new_password, keep_token=request.cookies.get(COOKIE_NAME)
+    )
+    db.add_audit(
+        conn, actor=user["username"], action="change_password",
+        detail="改密碼成功（其他裝置的登入已失效）",
+    )
+    return _render(request, "password.html", {"user": user, "error": None, "ok": True})
+
+
+@router.post("/users/reset")
+def users_reset(
+    request: Request,
+    username: str = Form(...),
+    new_password: str = Form(""),
+    csrf: str = Form(""),
+    user=Depends(require_manager),
+    conn=Depends(get_conn),
+):
+    """管理員重設任一帳號密碼（同仁忘記密碼）；該帳號所有登入立即失效（重設自己則保留本 session）。"""
+    _verify_csrf(user, csrf, conn)
+    username = username.strip()
+    error = None
+    if db.get_user(conn, username) is None:
+        error = "帳號不存在"
+    elif len(new_password) < auth.MIN_PASSWORD_LEN:
+        error = f"新密碼至少 {auth.MIN_PASSWORD_LEN} 個字元"
+    if error:
+        rows = conn.execute(
+            "SELECT username, role, created_at FROM users ORDER BY username"
+        ).fetchall()
+        return _render(
+            request, "users.html", {"user": user, "users": rows, "error": error},
+            status_code=400,
+        )
+    keep = request.cookies.get(COOKIE_NAME) if username == user["username"] else None
+    auth.set_password(conn, username, new_password, keep_token=keep)
+    db.add_audit(
+        conn, actor=user["username"], action="reset_password",
+        detail=f"重設 {username} 的密碼（其登入已全部失效）",
+    )
+    return RedirectResponse("/users", status_code=status.HTTP_303_SEE_OTHER)
+
+
 # --- 佇列總覽 ---------------------------------------------------------------
 
 
@@ -461,7 +543,9 @@ def queue_resolve(
     if partial_key and db.get_patient(conn, partial_key) is None:
         # 幽靈意圖（審查 R5）：write-ahead 先寫了意圖、病人卻從未建成（崩潰在
         # insert 之前）→ 該意圖作廢，否則操作者會被鎖死在一個不存在的代號上。
-        logger.warning("queue#%s partial 意圖 %s 無對應病人，視為作廢", item_id, partial_key)
+        logger.warning(
+            "queue#%s partial 意圖 %s 無對應病人，視為作廢", item_id, redact.mask_pid(partial_key)
+        )
         partial_key = None
 
     partial_filed = (payload.get("partial") or {}).get("filed") or []

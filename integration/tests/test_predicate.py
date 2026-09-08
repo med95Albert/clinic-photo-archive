@@ -192,16 +192,43 @@ def test_photo_multiple_ids_queues():
     assert v.reason == "批內多個證號"
 
 
-def test_photo_ocr_noise_id_filtered_out():
-    # 一個有效 + 一個 checksum 不過的雜訊 → 候選仍恰一（同源卡驗生日）
+def test_photo_valid_plus_checksum_invalid_id_queues():
+    # 跨模型審查 2026-09-09：一個有效 + 一個 checksum 不過的候選，過去會先濾掉
+    # 無效者再數 → 「恰一」→ 自動歸檔。但那個無效候選可能是**第二位病人**被誤讀
+    # 一碼的證號（兩人同框／兩人報告）。恰一原則在格式層計數：>1 → 佇列。
     conn = make_db()
     add_patient(conn, VALID_A, dob="2000-01-01")
     g = photo_group(VALID_A)
     v = predicate.decide_photo_batch(
         conn, g, [card(ids=[VALID_A, "A123456788"], dob="2000-01-01")]
     )
-    assert v.auto_file is True
-    assert v.patient_key == VALID_A
+    assert v.auto_file is False
+    assert v.reason == "批內多個證號"
+
+
+def test_photo_invalid_ids_across_images_still_count():
+    # 無效候選出現在另一張（非卡）圖上也要算——恰一是全批格式層計數。
+    conn = make_db()
+    add_patient(conn, VALID_A, dob="2000-01-01")
+    g = photo_group(VALID_A)
+    v = predicate.decide_photo_batch(
+        conn, g,
+        [card(ids=[VALID_A], dob="2000-01-01"), lesion(ids=["B123456781"])],
+    )
+    assert v.auto_file is False
+    assert v.reason == "批內多個證號"
+
+
+def test_photo_single_checksum_invalid_id_queues():
+    # 恰一但檢查碼不過 → 佇列（不是「無任何身份線索」，讓人工看得出是誤讀）。
+    conn = make_db()
+    add_patient(conn, VALID_A, dob="2000-01-01")
+    g = photo_group(VALID_A)
+    v = predicate.decide_photo_batch(
+        conn, g, [card(ids=["A123456788"], dob="2000-01-01")]
+    )
+    assert v.auto_file is False
+    assert v.reason == "證號未通過檢查碼"
 
 
 # ---- KEY fail-closed #1：有效證號但未建檔 → 首見證號 ----------------------
@@ -351,12 +378,21 @@ def test_report_dob_match_auto():
     assert v == Verdict(True, VALID_A, "報告證號已建檔＋生日吻合")
 
 
-def test_report_noise_id_filtered():
+def test_report_valid_plus_checksum_invalid_id_queues():
+    # 同 test_photo_valid_plus_checksum_invalid_id_queues：報告分支也在格式層計數。
     conn = make_db()
     add_patient(conn, VALID_A, dob="2000-01-01")
     v = predicate.decide_report(conn, RF(ids=["A123456788", VALID_A], dob="2000-01-01"))
-    assert v.auto_file is True
-    assert v.patient_key == VALID_A
+    assert v.auto_file is False
+    assert v.reason == "報告內多個證號"
+
+
+def test_report_single_checksum_invalid_id_queues():
+    conn = make_db()
+    add_patient(conn, VALID_A, dob="2000-01-01")
+    v = predicate.decide_report(conn, RF(ids=["A123456788"], dob="2000-01-01"))
+    assert v.auto_file is False
+    assert v.reason == "報告證號未通過檢查碼"
 
 
 if __name__ == "__main__":

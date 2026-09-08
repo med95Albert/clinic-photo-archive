@@ -24,7 +24,7 @@ import time
 from datetime import date
 from pathlib import Path
 
-from . import archiver, db, extract, ocr, predicate, taiwan_id
+from . import archiver, db, extract, ocr, predicate, redact, taiwan_id
 from .batching import REASON_STRAGGLER, scan_staging
 
 logger = logging.getLogger(__name__)
@@ -121,7 +121,8 @@ def process_inbox(conn, cfg, now: float | None = None) -> dict:
             fields = extract.extract_report_fields(text)
             verdict = predicate.decide_report(conn, fields)
         except Exception:
-            logger.exception("inbox OCR／解析失敗，改進佇列：%s", f)
+            # 檔名由人取（LINE 下載檔名／可能含姓名）→ 只印雜湊，不印原名。
+            logger.exception("inbox OCR／解析失敗，改進佇列：%s", redact.safe_name(f))
             _queue_inbox_file(conn, cfg, f, REASON_OCR_FAILED, {})
             counts["queued"] += 1
             continue
@@ -214,7 +215,7 @@ def _process_one_batch(conn, cfg, group, counts: dict) -> None:
         try:
             images = _ocr_batch(cfg, group)
         except Exception:
-            logger.exception("staging OCR 失敗，整組改進佇列：%s", group.key)
+            logger.exception("staging OCR 失敗，整組改進佇列：%s", redact.mask_text(group.key))
             _queue_batch(conn, cfg, group, REASON_OCR_FAILED, [], None)
             counts["queued"] += 1
             return
