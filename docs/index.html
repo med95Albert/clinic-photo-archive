@@ -209,14 +209,14 @@ footer a{color:var(--accent);word-break:break-all}
 <line class="arr" x1="425" y1="196" x2="425" y2="236" marker-end="url(#arrow)"/>
 <rect x="40" y="240" width="600" height="204" rx="8" fill="none" stroke="var(--ln)" stroke-width="0.5" stroke-dasharray="6 4"/>
 <text class="th" x="56" y="262" text-anchor="start" dominant-baseline="central">整合層（自建・單一伺服器執行）</text>
-<g class="c-purple"><rect x="56" y="280" width="170" height="56" rx="4"/><text class="th" x="141" y="300" text-anchor="middle" dominant-baseline="central">內容解析</text><text class="ts" x="141" y="318" text-anchor="middle" dominant-baseline="central">OCR・PDF 文字層</text></g>
+<g class="c-purple"><rect x="56" y="280" width="170" height="56" rx="4"/><text class="th" x="141" y="300" text-anchor="middle" dominant-baseline="central">內容解析</text><text class="ts" x="141" y="318" text-anchor="middle" dominant-baseline="central">影像 OCR（PDF 下一版）</text></g>
 <g class="c-purple"><rect x="255" y="280" width="170" height="56" rx="4"/><text class="th" x="340" y="300" text-anchor="middle" dominant-baseline="central">身份解析</text><text class="ts" x="340" y="318" text-anchor="middle" dominant-baseline="central">身分證號＝主鍵</text></g>
 <g class="c-purple"><rect x="454" y="280" width="170" height="56" rx="4"/><text class="th" x="539" y="300" text-anchor="middle" dominant-baseline="central">自動分類</text><text class="ts" x="539" y="318" text-anchor="middle" dominant-baseline="central">來源＋關鍵字規則</text></g>
 <line class="arr" x1="226" y1="308" x2="250" y2="308" marker-end="url(#arrow)"/>
 <line class="arr" x1="425" y1="308" x2="449" y2="308" marker-end="url(#arrow)"/>
 <g class="c-gray"><rect x="56" y="372" width="170" height="56" rx="4" stroke-dasharray="5 3"/><text class="th" x="141" y="392" text-anchor="middle" dominant-baseline="central">HIS 病歷號（選配）</text><text class="ts" x="141" y="410" text-anchor="middle" dominant-baseline="central">可日後回填別名</text></g>
 <path class="arr" d="M141 372 V354 H340 V340" fill="none" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
-<g class="c-purple"><rect x="454" y="372" width="170" height="56" rx="4"/><text class="th" x="539" y="392" text-anchor="middle" dominant-baseline="central">歸檔判準閘門</text><text class="ts" x="539" y="410" text-anchor="middle" dominant-baseline="central">恰一＋已建檔＋核對</text></g>
+<g class="c-purple"><rect x="454" y="372" width="170" height="56" rx="4"/><text class="th" x="539" y="392" text-anchor="middle" dominant-baseline="central">歸檔判準閘門</text><text class="ts" x="539" y="410" text-anchor="middle" dominant-baseline="central">完整歸檔判準四條件</text></g>
 <line class="arr" x1="539" y1="336" x2="539" y2="368" marker-end="url(#arrow)"/>
 <line class="arr" x1="539" y1="428" x2="539" y2="480" marker-end="url(#arrow)"/>
 <path class="arr" d="M470 428 V456 H161 V480" fill="none" marker-end="url(#arrow)"/>
@@ -229,7 +229,7 @@ footer a{color:var(--accent);word-break:break-all}
 <line class="arr" x1="405" y1="558" x2="405" y2="576" marker-end="url(#arrow)"/>
 <line class="arr" x1="555" y1="558" x2="555" y2="576" marker-end="url(#arrow)"/>
 <g class="c-teal"><rect x="40" y="580" width="130" height="56" rx="4"/><text class="th" x="105" y="600" text-anchor="middle" dominant-baseline="central">病人時間軸</text><text class="ts" x="105" y="618" text-anchor="middle" dominant-baseline="central">依時序查閱</text></g>
-<g class="c-gray"><rect x="190" y="580" width="130" height="56" rx="4"/><text class="th" x="255" y="600" text-anchor="middle" dominant-baseline="central">每日加密備份</text><text class="ts" x="255" y="618" text-anchor="middle" dominant-baseline="central">留存成年後 7 年</text></g>
+<g class="c-gray"><rect x="190" y="580" width="130" height="56" rx="4"/><text class="th" x="255" y="600" text-anchor="middle" dominant-baseline="central">診所排程備份</text><text class="ts" x="255" y="618" text-anchor="middle" dominant-baseline="central">留存成年後 7 年</text></g>
 <g class="c-teal"><rect x="340" y="580" width="130" height="56" rx="4" stroke-dasharray="5 3"/><text class="th" x="405" y="600" text-anchor="middle" dominant-baseline="central">搜尋・報表</text><text class="ts" x="405" y="618" text-anchor="middle" dominant-baseline="central">跨病人統計</text></g>
 <g class="c-teal"><rect x="490" y="580" width="130" height="56" rx="4" stroke-dasharray="5 3"/><text class="th" x="555" y="600" text-anchor="middle" dominant-baseline="central">數值結構化</text><text class="ts" x="555" y="618" text-anchor="middle" dominant-baseline="central">接減重・生長</text></g>
 <rect x="40" y="649" width="14" height="14" rx="3" fill="var(--card)" stroke="var(--ln)" stroke-width="0.5"/>
@@ -242,7 +242,7 @@ footer a{color:var(--accent);word-break:break-all}
     <ul class="bullets">
       <li><b>資料從上面進來：</b>同仁手機拍的照片、檢驗所傳來的報告。（虛線那兩格「LINE 自動接收」「歷史資料回溯」是之後才加。）</li>
       <li><b>中間「整合層」自動整理：</b>讀出照片和報告上的身分證字號，經過雙重檢查，用證號當資料夾把東西歸好；讀不準的送「待確認佇列」交給人處理。</li>
-      <li><b>整理好之後：</b>每位病人一條時間軸可以依時間翻閱，資料每天加密備份。</li>
+      <li><b>整理好之後：</b>每位病人一條時間軸可以依時間翻閱；資料依「三份、兩種媒體、一份放診所外」（3-2-1）原則，由診所的排程備份作業負責（備份不是這套程式做的）。</li>
     </ul>
   </section>
 
@@ -268,12 +268,12 @@ footer a{color:var(--accent);word-break:break-all}
   <section id="photo">
     <h2><span class="idx">04</span>拍照協定：N0</h2>
     <p class="mnemonic">先拍卡、再拍灶；換病人、重新拍卡。</p>
-    <p>「N0」就是每一批照片的<b>第一張</b>：把健保卡和病灶拍在同一張裡（卡片放病灶旁、字面朝上、不反光），讓系統知道這批是哪位病人。之後的特寫（N1、N2…）就不用再拍卡了。</p>
+    <p>「N0」就是每一批照片的<b>第一張</b>：把健保卡和病灶拍在同一張裡（卡片放病灶旁、字面朝上、不反光），讓系統知道這批是哪位病人。之後的特寫（N1、N2…）<b>不要</b>再拍到卡片——第二張以後只要出現卡片影像，整批就會退回待確認。</p>
     <div class="svg-scroll">
       <svg width="100%" viewBox="0 0 680 530" role="img" aria-label="病灶拍照 N0 錨定協定"><defs><marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
 <g class="c-purple"><rect x="220" y="50" width="240" height="56" rx="4"/><text class="th" x="340" y="70" text-anchor="middle" dominant-baseline="central">N0：健保卡＋病灶同框</text><text class="ts" x="340" y="88" text-anchor="middle" dominant-baseline="central">這一批的身份錨點</text></g>
 <line class="arr" x1="340" y1="106" x2="340" y2="142" marker-end="url(#arrow2)"/>
-<g class="c-gray"><rect x="220" y="146" width="240" height="56" rx="4"/><text class="th" x="340" y="166" text-anchor="middle" dominant-baseline="central">N1–Nn：病灶連拍特寫</text><text class="ts" x="340" y="184" text-anchor="middle" dominant-baseline="central">卡片不必再入鏡</text></g>
+<g class="c-gray"><rect x="220" y="146" width="240" height="56" rx="4"/><text class="th" x="340" y="166" text-anchor="middle" dominant-baseline="central">N1–Nn：病灶連拍特寫</text><text class="ts" x="340" y="184" text-anchor="middle" dominant-baseline="central">卡片不要再入鏡</text></g>
 <line class="arr" x1="340" y1="202" x2="340" y2="238" marker-end="url(#arrow2)"/>
 <g class="c-gray"><rect x="220" y="242" width="240" height="56" rx="4"/><text class="th" x="340" y="262" text-anchor="middle" dominant-baseline="central">確認送出＝完成一批</text><text class="ts" x="340" y="280" text-anchor="middle" dominant-baseline="central">手機端核對辨識結果</text></g>
 <line class="arr" x1="340" y1="298" x2="340" y2="334" marker-end="url(#arrow2)"/>
@@ -316,8 +316,8 @@ footer a{color:var(--accent);word-break:break-all}
 <g class="c-amber"><rect x="165" y="330" width="105" height="40" rx="4"/><text class="th" x="217" y="350" text-anchor="middle" dominant-baseline="central">待確認</text></g>
 <line class="arr" x1="92" y1="370" x2="92" y2="386" marker-end="url(#arrow3)"/>
 <line class="arr" x1="217" y1="370" x2="217" y2="386" marker-end="url(#arrow3)"/>
-<g class="c-gray"><rect x="40" y="390" width="230" height="40" rx="4"/><text class="th" x="155" y="410" text-anchor="middle" dominant-baseline="central">已確認・可改派修正</text></g>
-<g class="c-teal"><rect x="300" y="210" width="340" height="240" rx="8"/><text class="th" x="316" y="232" text-anchor="start" dominant-baseline="central">伺服器資料夾一覽</text><text class="ts" x="316" y="258" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">archive\</text><text class="ts" x="316" y="276" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">├ A12345****\（遮罩示意）</text><text class="ts" x="316" y="294" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">│　2026-07-18_病灶照_01.jpg</text><text class="ts" x="316" y="312" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">│　2026-07-18_檢驗-CBC_01.jpg</text><text class="ts" x="316" y="330" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">│　2026-08-02_InBody_01.pdf</text><text class="ts" x="316" y="348" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">└ …每位病人一個資料夾</text><text class="ts" x="316" y="372" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">inbox\ ─ 收件（LINE 拖入）</text><text class="ts" x="316" y="390" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">staging\ ─ 手機上傳暫存</text><text class="ts" x="316" y="408" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">review\ ─ 待確認區</text><text class="ts" x="316" y="426" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">clinic.db ─ SQLite 索引＋稽核</text></g>
+<g class="c-gray"><rect x="40" y="390" width="230" height="40" rx="4"/><text class="th" x="155" y="410" text-anchor="middle" dominant-baseline="central">已歸檔・改派需後台</text></g>
+<g class="c-teal"><rect x="300" y="210" width="340" height="240" rx="8"/><text class="th" x="316" y="232" text-anchor="start" dominant-baseline="central">伺服器資料夾一覽</text><text class="ts" x="316" y="258" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">archive\</text><text class="ts" x="316" y="276" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">├ A12345****\（遮罩示意）</text><text class="ts" x="316" y="294" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">│　2026-07-18_病灶照_01.jpg</text><text class="ts" x="316" y="312" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">│　2026-07-18_檢驗-CBC_01.jpg</text><text class="ts" x="316" y="330" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">│　2026-08-02_文件_01.pdf</text><text class="ts" x="316" y="348" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">└ …每位病人一個資料夾</text><text class="ts" x="316" y="372" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">inbox\ ─ 收件（LINE 拖入）</text><text class="ts" x="316" y="390" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">staging\ ─ 手機上傳暫存</text><text class="ts" x="316" y="408" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">review\ ─ 待確認區</text><text class="ts" x="316" y="426" text-anchor="start" dominant-baseline="central" style="font-family:var(--fm)">clinic.db ─ SQLite 索引＋稽核</text></g>
 </svg>
     </div>
     <p class="fig-cap">歸類方式與伺服器資料夾一覽。圖中的 <span class="mono">A12345****</span> 是<b>後四碼遮罩的格式示意</b>，不是真實證號。</p>
@@ -331,7 +331,7 @@ footer a{color:var(--accent);word-break:break-all}
       <li><b>報告照舊從 LINE 進來，落地後不再上雲：</b>檢驗所傳報告本來就是走 LINE（這個現行流程不變）；報告進到診所系統之後的辨識、整理、儲存全部在診所內完成，不再上傳任何雲端。</li>
       <li><b>不會存進私人手機相簿：</b>用系統拍的照片不會留在你的手機裡。</li>
       <li><b>伺服器與備份都加密：</b>存資料的電腦整顆硬碟加密；備份照「三份、兩種媒體、一份放診所外」的原則做，放到診所外的那份是**加密的備援硬碟**（防火災竊盜，鑰匙由兩人分別保管）——除此之外，資料不放進任何雲端。</li>
-      <li><b>用系統查閱都有紀錄：</b>誰、什麼時候、看了誰的資料，系統都會記下來；直接開資料夾只保留給極少數管理者，另以 Windows 系統層稽核補齊那一段的紀錄。</li>
+      <li><b>用系統查閱都有紀錄：</b>用系統查閱病人資料與處理待確認清單，都有紀錄；直接開資料夾只保留給極少數管理者，另以 Windows 系統層稽核補齊那一段的紀錄。</li>
       <li><b>依法保存：</b>病歷至少保存 7 年；未成年病人保存到成年後 7 年——病人年紀越小要放越久（新生兒的紀錄約需保存 25 年）。</li>
     </ul>
   </section>
@@ -366,6 +366,13 @@ footer a{color:var(--accent);word-break:break-all}
         <h3>這是輔助歸檔，不是病歷本體</h3>
         <p>系統幫忙把照片和報告收好、找得到；正式病歷仍以診所既有的病歷（HIS）為準。</p>
       </div>
+      <div class="limit">
+        <h3>v0 還做不到的四件事</h3>
+        <p><b>一、PDF 一律進「待確認」。</b>v0 不讀 PDF 的內容（沒有 PDF 文字層、也不對 PDF 做 OCR），檢驗所給的 PDF 一定要由管理者人工指定病人；歸檔後的型別會記成「文件」。<br>
+        <b>二、健保卡照片不會自動刪。</b>手機端拍到卡片的那張，系統只會另外列一項在待確認清單，由管理者二選一——「純卡片照」移除（進回收區，非永久刪除）、「卡＋病灶同框（N0）」保留。系統絕不自己刪照片。<br>
+        <b>三、待確認清單只有管理者帳號能處理。</b>一般同仁登入後看得到還有幾件待確認，但要打開項目、指定病人，必須是管理者帳號。<br>
+        <b>四、已經歸檔的照片要改人，v0 得找系統管理者。</b>網頁上只能指定「還在待確認清單」的項目；已自動歸檔的要改派，目前需請系統管理者從後台處理，網頁改派介面排在 v1。</p>
+      </div>
     </div>
   </section>
 
@@ -382,7 +389,7 @@ footer a{color:var(--accent);word-break:break-all}
       </details>
       <details>
         <summary>拍完才發現選錯人？</summary>
-        <div class="a">告訴管理者，在「待確認佇列」一鍵改派，照片會移到正確病人名下，並留下稽核紀錄。</div>
+        <div class="a">分兩種情況。照片<b>還在「待確認佇列」</b>裡：告訴管理者，在佇列頁點選正確的病人，照片就會歸到他名下，並留下稽核紀錄。照片<b>已經自動歸檔</b>：v0 的網頁沒有改派介面，要請系統管理者從後台處理（網頁上的改派功能排在 v1）。</div>
       </details>
       <details>
         <summary>手機連不上怎麼辦？</summary>

@@ -19,17 +19,23 @@
 
 ## 架構一句話
 
-拍照端採用開源工具 [ClinicSnap](https://github.com/leon80148/ClinicSnap)（手機掃 QR 拍照、健保卡本機辨識、照片直落診間電腦），我們在其資料夾輸出之上自建「整合層」：watcher 監看收件夾 → 地端 OCR 抽取身分證字號 → checksum＋生日雙驗證 → 以證號為主鍵歸檔 → SQLite 索引＋待人工確認佇列。細節見 `docs/architecture.md`。
+拍照端採用開源工具 [ClinicSnap](https://github.com/leon80148/ClinicSnap)（手機掃 QR 拍照、健保卡本機辨識、照片直落診間電腦），我們在其資料夾輸出之上自建「整合層」：watcher 監看收件夾 → 地端 OCR 抽取身分證字號 → 套用 [`docs/architecture.md`](docs/architecture.md) 第 4 節的**完整自動歸檔判準**（恰一證號＋checksum＋已建檔＋獨立第二驗證，四條同時滿足才自動歸檔）→ 以證號為主鍵歸檔 → SQLite 索引＋待人工確認佇列；任何一條不滿足一律進佇列。判準的權威定義只有第 4 節那一份，本文與其他文件都只引用、不另寫簡化版。
 
 ## 使用方式
 
-這是文件 repo，直接讀即可：
+### 讀文件
 
 1. 線上看同仁說明網頁：<https://med95albert.github.io/clinic-photo-archive/>
 2. 本機看網頁：用任何瀏覽器開啟 `docs/index.html`
 3. 讀架構文件：`docs/architecture.md`（GitHub 上可直接閱讀，含 mermaid 流程圖）
 
-### 診所伺服器部署（Claude Code 一行指令）
+### 跑整合層（開發／試跑）
+
+整合層是可執行的 Python 服務，安裝、啟動、設定、測試與契約自測的完整說明在
+[integration/README.md](integration/README.md)；模組層級的實作契約見
+[integration/SPEC.md](integration/SPEC.md)。
+
+### 部署到診所伺服器（Claude Code 一行指令）
 
 診所的 Windows 伺服器裝好 Claude Code 後，開一個 session 貼這一行即可（agent 會照
 [deploy/AGENT_DEPLOY.md](deploy/AGENT_DEPLOY.md) 的 runbook 逐步安裝、驗證、產出驗收報告）：

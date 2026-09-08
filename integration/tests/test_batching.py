@@ -1,4 +1,5 @@
-"""batching.scan_staging 的確定性混批偵測測試（architecture §5.6 / SPEC §7）。
+"""batching.scan_staging 的確定性混批偵測測試
+（architecture §5 第 7 條（批次還原機制）/ SPEC §7）。
 
 以 os.utime 固定 mtime、以 now 參數控制靜置窗，測試不依真實時鐘。
 """

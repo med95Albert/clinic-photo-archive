@@ -7,6 +7,8 @@ import logging
 import os
 import secrets
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 from . import db
@@ -22,6 +24,55 @@ _SCRYPT_SALT_BYTES = 16
 _SCRYPT_SCHEME = "scrypt"
 
 FIRST_RUN_ADMIN_FILENAME = "FIRST_RUN_ADMIN.txt"
+
+# icacls 逾時（秒）：只是收緊 ACL，卡住不值得擋住首次啟動。
+_ICACLS_TIMEOUT = 10
+
+
+def _restrict_file_permissions(path: Path) -> None:
+    """盡力把密碼檔權限收到「只有目前使用者可讀」。
+
+    POSIX 走 ``os.chmod(0o600)``。Windows 上 ``os.chmod`` 只能切唯讀旗標、對 ACL
+    是 no-op，等於毫無保護，因此改用 ``icacls`` 砍掉繼承並只留目前使用者唯讀。
+    這是 best-effort：icacls 不存在、逾時、或回非零（權限不足、非 NTFS 磁碟區、
+    網路磁碟機）都只記警告，不中斷首次啟動流程——否則會變成「權限收不緊就完全
+    無法開機」，比留一個權限較寬的檔案更糟。
+    """
+    if sys.platform == "win32":
+        username = os.environ.get("USERNAME", "")
+        if not username:
+            logger.warning("無法取得 USERNAME 環境變數，略過 %s 的 ACL 收緊", path.name)
+            return
+        try:
+            proc = subprocess.run(
+                [
+                    "icacls",
+                    str(path),
+                    "/inheritance:r",
+                    "/grant:r",
+                    f"{username}:R",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=_ICACLS_TIMEOUT,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            logger.warning("收緊 %s 權限失敗（icacls 無法執行）：%s", path.name, exc)
+            return
+        if proc.returncode != 0:
+            logger.warning(
+                "收緊 %s 權限失敗（icacls 回傳 %s）：%s",
+                path.name,
+                proc.returncode,
+                (proc.stderr or proc.stdout or "").strip(),
+            )
+        return
+
+    try:
+        os.chmod(path, 0o600)
+    except OSError as exc:
+        logger.warning("收緊 %s 權限失敗：%s", path.name, exc)
 
 
 def hash_pw(pw: str) -> str:
@@ -71,8 +122,12 @@ def ensure_initial_admin(conn: sqlite3.Connection, data_root: str | Path) -> Non
         f"密碼：{password}\n",
         encoding="utf-8",
     )
-    os.chmod(admin_file, 0o600)
+    _restrict_file_permissions(admin_file)
     logger.info("已建立初始管理員帳號 admin，密碼檔：%s", admin_file)
+    if sys.platform == "win32":
+        logger.warning(
+            "Windows 上此檔無完整權限保護，讀完立即刪除：%s", admin_file
+        )
 
 
 def new_session(conn: sqlite3.Connection, username: str, hours: float) -> str:

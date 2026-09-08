@@ -17,6 +17,13 @@
 ```
 integration/
   pyproject.toml            ← 已由指揮者建立
+  requirements.lock         ← 部署鎖版依賴：deploy/AGENT_DEPLOY.md Step 2 的**唯一依賴真相**
+                              （診所機一律 `pip install -r requirements.lock` ＋
+                              `pip install -e . --no-deps`；缺檔即停下回報，不得退回
+                              `pip install -e ".[dev]"` 抓未鎖版依賴）
+  run.py                    ← 啟動器（Fix-C）：把 `integration/` 插進 sys.path 最前面再呼叫
+                              `clinic_archive.main.main()`，不依賴 editable install 是否生效；
+                              不改變 config.json／data_root 的「相對於工作目錄」語意
   clinic_archive/
     __init__.py             ← 空
     config.py               ← T2
@@ -43,9 +50,17 @@ integration/
     test_pipeline_e2e.py    ← T5（模擬 ClinicSnap 寫檔行為，不需真 OCR）
     test_ocr_live.py        ← T3（pytest.mark.e2e，需下載模型，CI 可跳過）
     test_webapp.py          ← T6（fastapi TestClient）
+    test_provenance.py      ← Fix-A 回歸：證據同源（跨圖湊吻合攻擊）、病歷號重號、
+                              卡片統一處理（單張純卡批也產 card_suspect）
+    test_durability.py      ← Fix-C 回歸：file_record 併發覆寫、reconcile 孤兒回收、
+                              merge_patient 外鍵前置檢查、run.py 啟動器與 bootstrap 接線
   contract_test.py          ← T7
   README.md                 ← T7
 ```
+
+`test_provenance.py`、`test_durability.py`、`test_webapp.py` 與 `test_predicate.py`／
+`test_batching.py`／`test_archiver.py`／`contract_test.py --selftest` 同屬部署硬閘門
+（見 `deploy/AGENT_DEPLOY.md` Step 3）：任一 failed 一律停下回報，不得改程式碼求綠。
 
 ## 2. config.py（T2）
 
@@ -68,7 +83,9 @@ allowed_exts: [".jpg",".jpeg",".png",".webp",".heic",".pdf"]
 
 ## 3. db.py（T2）
 
-`connect(db_path)` → sqlite3 連線（WAL、foreign_keys=ON、Row factory）。`init_db(conn)` 執行 DDL（idempotent）。DAO 一律用參數化查詢。DDL：
+`connect(db_path)` → sqlite3 連線（WAL、foreign_keys=ON、Row factory、`busy_timeout=10000`——watcher 執行緒與 web 請求併發寫入時先自旋等待，不立刻拋 `OperationalError`）。`init_db(conn)` 執行 DDL（idempotent）。DAO 一律用參數化查詢。
+
+**schema 的事實來源是 `clinic_archive/db.py` 的 `SCHEMA_SQL`**，本節與它同步維護（改任一邊都要同時改另一邊）：
 
 ```sql
 CREATE TABLE IF NOT EXISTS patients(
@@ -104,7 +121,8 @@ CREATE TABLE IF NOT EXISTS users(
   created_at TEXT DEFAULT (datetime('now','localtime')));
 CREATE TABLE IF NOT EXISTS sessions(
   token TEXT PRIMARY KEY, username TEXT NOT NULL REFERENCES users(username),
-  expires_at TEXT NOT NULL);
+  expires_at TEXT NOT NULL,
+  csrf TEXT);                          -- 每個 session 一枚 CSRF token（見第 11 節）
 CREATE TABLE IF NOT EXISTS audit(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts TEXT DEFAULT (datetime('now','localtime')),
@@ -114,12 +132,31 @@ CREATE TABLE IF NOT EXISTS audit(
 CREATE INDEX IF NOT EXISTS idx_records_patient ON records(patient_key, taken_date);
 ```
 
-DAO 函式（皆 `(conn, …)`）：`upsert_patient`、`get_patient`、`find_patient_by_chart`、`insert_record`、`records_for_patient`、`mark_batch`、`batch_state`、`add_queue_item`、`open_queue_items`、`resolve_queue_item`、`add_audit`、`create_user`、`get_user`、`create_session`、`get_session`（自動過期刪除）、`list_patients(search)`。
+DAO 函式（皆 `(conn, …)`）：`upsert_patient`、`insert_patient_strict`、`get_patient`、`find_patients_by_chart`、`find_patient_by_chart`、`insert_record`、`records_for_patient`、`mark_batch`、`batch_state`、`add_queue_item`、`open_queue_items`、`resolve_queue_item`、`add_audit`、`create_user`、`get_user`、`create_session`、`get_session`（自動過期刪除）、`list_patients(search)`。
+
+DAO 語意注意（與判準安全直接相關，不得簡化）：
+
+- `insert_patient_strict(conn, patient_key, name, dob, chart_no, created_by)`：純 `INSERT`，
+  鍵已存在時放行 `sqlite3.IntegrityError` 往上拋。**人工建新檔（佇列裁決）一律走它**，
+  讓呼叫端明確面對「這個鍵已經有人了」；`upsert_patient` 遇既有鍵會靜默更新，只適合系統回填。
+- `find_patients_by_chart(conn, chart_no) -> list[Row]`：回**全部**命中列。病歷號在 patients
+  表無唯一約束（HIS 別名可能重號），故歸檔判準一律用它並自行檢查 `len==1`，其餘 fail-closed
+  進佇列。`find_patient_by_chart(conn, chart_no) -> Row|None` 是「回第一筆」的相容 wrapper，
+  **僅供 UI 顯示等非歸檔用途**，判準不得使用。
+- `create_session(conn, token, username, hours) -> str`：**回傳本次配發的 csrf token**
+  （`secrets.token_urlsafe(16)`，與 session 同列持久化）；`get_session` 會一併帶回該欄。
+- `init_db` 對舊庫（round-1 schema，sessions 無 csrf 欄）以 `PRAGMA table_info` 檢查後
+  `ALTER TABLE sessions ADD COLUMN csrf TEXT` 補欄——`CREATE TABLE IF NOT EXISTS` 不會補欄，
+  少了這段升級後的既有資料庫會登不進去。
+- `insert_record`、`resolve_queue_item` **非 production 主路徑**：實際歸檔一律走
+  `archiver.file_record`（它自己組 SQL 並在檔案就位後才寫 records＋audit），佇列裁決一律走
+  `webapp.queue_resolve` 的原子認領 UPDATE（見第 11 節）。這兩個 DAO 保留給測試與工具腳本，
+  新程式碼不得改走它們繞過上述不變量。
 
 ## 4. auth.py（T2）
 
 - `hash_pw(pw)` / `verify_pw(pw, stored)`：scrypt n=2**14 r=8 p=1，格式 `scrypt$<salt_hex>$<hash_hex>`。
-- `ensure_initial_admin(conn, data_root)`：users 空 → 建 `admin`＋`secrets.token_urlsafe(9)` 密碼，寫入 `{data_root}/FIRST_RUN_ADMIN.txt`（提示登入後改密與刪檔）並 log。
+- `ensure_initial_admin(conn, data_root)`：users 空 → 建 `admin`＋`secrets.token_urlsafe(9)` 密碼，寫入 `{data_root}/FIRST_RUN_ADMIN.txt`（提示登入後改密與刪檔）並 log。該檔權限**盡力**收到「只有目前使用者可讀」：POSIX 走 `os.chmod(0o600)`；Windows 上 `os.chmod` 對 ACL 是 no-op，改以 `icacls /inheritance:r /grant:r <user>:R` 收緊。收緊失敗（icacls 不存在／逾時／非 NTFS／權限不足）只記警告，**不中斷首次啟動**——「權限收不緊就完全開不了機」比留一個權限較寬的檔案更糟；Windows 上另 log 一則「讀完立即刪除」警告。
 - `new_session(conn, username, hours)` → token（`secrets.token_urlsafe(32)`）；`check_session(conn, token)` → username|None。
 
 ## 5. taiwan_id.py（T1）
@@ -145,11 +182,13 @@ classify_manual_input(s: str) -> tuple[str, str]
 ```python
 get_engine(ocr_version, det_side_len)      # lru_cache；rapidocr 統一套件，v6→medium、v5→mobile
 ocr_image_text(path_or_bytes, cfg) -> str  # EXIF 校正→RGB→引擎→逐行文字；threading.Lock 序列化
-ocr_pdf_text(path, cfg) -> str             # v0：PDF 先嘗試 pypdf?（不在白名單）→ 改為：不支援 PDF OCR，
-                                           # 但 PDF 有文字層時用「不新增依賴」的方式抽不可行 → v0 規則：
-                                           # PDF 一律進佇列（reason='PDF 需人工'），記在 README 限制
+ocr_pdf_text(path, cfg) -> str             # v0 不支援，刻意 fail-loud：一律 raise NotImplementedError。
+                                           # 依賴白名單無 pypdf/pdfplumber，掃描型 PDF 另需 render→OCR 依賴；
+                                           # 正確路徑是 process_inbox 在呼叫 OCR 之前就把 PDF 攔下進佇列
+                                           #（reason='PDF 需人工'）。不得改成靜默回空字串——那會讓 PDF 被
+                                           # 當成「無文字」放行，違反 fail-closed。
 ```
-（PDF 抽取列 v1；v0 只收影像檔，PDF 直接佇列——誠實限制，不硬做。）
+（PDF 抽取列 v1；v0 只收影像檔，PDF 直接佇列——誠實限制，不硬做，見 README。）
 
 **extract.py**（純文字，不碰引擎，完整單元測試）：
 ```python
@@ -163,59 +202,176 @@ classify_report(keywords) -> tuple[str, str|None]   # rtype, subtype
 ```
 姓名抽取：`姓\s*名[:：]?\s*([一-鿿]{2,4})`；dob 找「出生|生日」行；report_date 找「報告日|採檢日」行。
 
-## 7. batching.py（T4）——照 architecture.md §5.6，一字不放寬
+## 7. batching.py（T4）——照 architecture.md §5 第 7 條（批次還原機制），一字不放寬
 
 ClinicSnap `by_patient` 輸出：`staging/{pid}/{YYYY-MM-DD}_{HHMMSS}_{idx}[-{coll}].{ext}`；無 ID 批在 `staging/_unsorted/` 同格式。
 
 ```python
 FILE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d{6})_(\d+)(?:-(\d+))?\.(jpe?g|png|webp|heic)$", re.I)
 @dataclass BatchGroup: key:str; pid:str|None; date:str; time:str; files:list[Path]; complete:bool; suspect_reason:str|None
-scan_staging(staging: Path, now=None) -> list[BatchGroup]
+scan_staging(staging: Path, now=None, *, settle_seconds: int = 10,
+             processed_keys: set[str] | None = None) -> list[BatchGroup]
+# 0) 名稱以 "." 開頭者一律略過（.DS_Store 等系統雜項，非臨床影像）——第一層項目與
+#    資料夾內檔案都適用；contract_test.py 的走訪行為與此對齊
 # 1) 走訪一層子資料夾（資料夾名=pid；_unsorted→pid=None）＋容忍直接散落檔（pid=None）
-# 2) 檔名不合 FILE_RE → 單獨成組 suspect_reason='檔名格式不明'
+# 2) 檔名不合 FILE_RE → 單獨成組 suspect_reason='檔名格式不明'，key=f"{pid or '~'}|badname|{檔名}"
 # 3) 依 (pid, date, time) 分組成 batch_key = f"{pid or '~'}|{date}|{time}"
-# 4) 靜置窗：組內最新 mtime 距 now < settle_seconds → 本輪跳過（不回傳）
+# 4) 靜置窗：組內最新 mtime 距 now < settle_seconds → 本輪跳過（不回傳）；now 預設 time.time()，
+#    測試可注入。settle_seconds 由呼叫端傳入（reports.py 傳 cfg.settle_seconds），預設 10
 # 5) 完整性：idx 集合必須恰為 1..N 且無 coll 後綴；否則 suspect_reason='序號不連續或碰撞後綴＝疑混批'
-# 6) 已處理鍵（由呼叫端查 processed_batches 後傳入或回傳後過濾）：鍵已存在 → 整組標 suspect_reason='遲到檔'
+# 6) processed_keys（由呼叫端查 processed_batches 後以關鍵字參數傳入）：鍵已存在 →
+#    整組標 suspect_reason='遲到檔'
+# 精度順序（同時成立時取最確定者）：遲到檔 > 序號/碰撞 > 乾淨
 ```
-測試：正常批、亂序寫入未靜置、碰撞後綴、缺號、遲到檔、_unsorted、垃圾檔名，各斷言分組與 suspect_reason。
+測試：正常批、亂序寫入未靜置、碰撞後綴、缺號、遲到檔、_unsorted、垃圾檔名、dotfile 略過，各斷言分組與 suspect_reason。
 
 ## 8. predicate.py（T4）——architecture.md §4 判準，單一實作點
 
 ```python
 @dataclass Verdict: auto_file:bool; patient_key:str|None; reason:str
-def decide_photo_batch(conn, group:BatchGroup, ocr_ids:list[str], card_dob:str|None) -> Verdict
-def decide_report(conn, fields:ReportFields) -> Verdict
+
+@dataclass ImageEvidence:            # 批內「一張圖」的獨立證據，逐圖保存、不彙總跨圖證據
+    path: Path                       # 該圖路徑（歸檔／佇列時據以搬移）
+    ids: list[str] = []              # 該圖 OCR 出的證號「格式層」候選（checksum 由本模組套用）
+    is_card: bool = False            # 該圖是否偵測為健保卡（extract.detect_card）
+    dob: str | None = None           # 該圖讀到的生日（ISO）；只採信 is_card 圖上的生日
+
+def decide_photo_batch(conn, group: BatchGroup, images: list[ImageEvidence]) -> Verdict
+def decide_report(conn, fields: ReportFields) -> Verdict
 ```
-photo 分支邏輯（依序）：
-1. suspect_reason 非空 → queue(reason)。
-2. 解析 pid：`classify_manual_input`；pcode→患者需存在；chart_no→`find_patient_by_chart`；national_id→驗 checksum。解析失敗/查無 → queue。
-3. 候選證號 = set(ocr_ids 通過 checksum)。**恰一**：len>1 → queue('批內多個證號')。
-4. len==1：id=候選。未建檔 → queue('首見證號')。已建檔：
-   - card_dob 可讀：與 patients.dob 吻合 → auto；不吻合 → queue('生日不符')。
-   - card_dob 不可讀：pid 解析出的病人 == id 的病人 → auto（手機端人工背書）；否則 queue。
-5. len==0：無卡批。pid 解析到已建檔病人 → **queue('無卡批需人工一鍵確認')**（§4：無複掃證號可比對，fail closed）；pid 也無 → queue('無任何身份線索')。
-報告分支：恰一 checksum 證號→已建檔→**dob 必須可讀且吻合**→auto；其餘 queue（首見證號、生日缺/不符、多證號、零證號各給明確 reason）。
-測試：真值表逐格；特別含「有效證號但未建檔」「證號吻合但生日不符」「無卡但 pid=已建檔」三個關鍵 fail-closed 例。
+
+> **禁止回到全批 ids 聯集＋單一 `card_dob` 的舊介面**（`decide_photo_batch(conn, group, ocr_ids, card_dob)`）。
+> 那個介面把全批證據攤平成兩個純量，判準無從得知「證號」與「生日」是否出自同一張圖，
+> 於是 A 圖的證號可以和 B 圖的卡面生日跨圖湊成一筆假吻合而**整批歸錯人**——這是本專案
+> 已被回歸測試釘住的 P0 歸錯人漏洞（`tests/test_provenance.py` 第 1 案）。任何「簡化參數」
+> 的重構若丟掉逐圖結構，等於重新引入該漏洞，一律不得放行。
+
+`images` 由 `reports._ocr_batch` 依 `group.files` 的順序（檔名序號序）逐張建立，故
+`images[0]` 即 N0 位置。photo 分支邏輯（依序，任何一格不滿足即 fail-closed 進佇列）：
+
+1. `group.suspect_reason` 非空（序號/碰撞/遲到/檔名）→ queue(該原因)。
+2. 解析手機端帶入代碼 `group.pid`（若有）：`classify_manual_input`；
+   `national_id`→格式符且 checksum 過即取其值（是否已建檔留待第 4 步）；
+   `pcode`→患者需存在，否則 queue('暫時代號查無此人')；
+   `chart_no`→`find_patients_by_chart`，**命中數恰為 1** 才可據以歸檔，0 筆或重號一律
+   queue('病歷號對應不唯一或不存在')；`invalid`→queue('手機端身份代碼無法解析')。
+3. 候選證號 = 全批各圖 `ids` 中通過 checksum 者的**聯集**（去重）。**恰一原則**：
+   len>1 → queue('批內多個證號')。
+4. len==1（cid＝該證號）：未建檔 → queue('首見證號')。已建檔則依序：
+   - **批內第二張（含以後）出現任何卡片影像** → queue('卡片非首張或多卡影像需人工')。
+     此檢查**無條件優先**於下面所有放行分支：即使首張卡驗證全數通過，後方的卡仍可能屬於
+     另一位病人（A 卡首張全吻合＋B 卡在後 → 整批誤歸 A）。
+   - 首張是錨點卡（`images[0].is_card` 且 `cid in images[0].ids`）**且該圖讀得出生日**：
+     建檔資料無生日 → queue('建檔資料缺生日，無法交叉核對')；生日吻合 → **auto**
+     ('證號已建檔＋卡面生日吻合')；不吻合 → queue('生日不符')。
+     生日必須與證號**出自同一張圖**（同圖同源），跨圖組合一律不採信。
+   - 首張是錨點卡但生日不可讀：第 2 步解析出的 `resolved_key == cid`（手機端人工背書，
+     與 OCR 無關的獨立驗證）→ **auto**('證號已建檔＋手機端人工背書一致')；
+     否則 queue('卡面生日不可讀且手機端代碼未背書')。
+   - 批內有卡但 cid 不出自首張錨點卡（證號來自文件照等）→ queue('證據不同源需人工')。
+   - 批內完全沒有卡片影像（證號只見於非卡圖）→ queue('證號僅見於非卡片影像需人工')。
+5. len==0（無卡批）：`group.pid` 有值（能走到這一步，代表它在第 2 步已解析成功）→
+   queue('無卡批需人工一鍵確認')
+   （§4：無複掃證號可比對，fail closed）；連 pid 都沒有 → queue('無任何身份線索')。
+
+報告分支（`decide_report`）：零證號 → queue('報告無有效證號')；多證號 → queue('報告內多個證號')；
+恰一但未建檔 → queue('首見證號')；**報告必有生日、生日必查**——`fields.dob` 缺 →
+queue('報告缺生日')，建檔資料缺生日 → queue('建檔資料缺生日，無法交叉核對')，吻合 → **auto**
+('報告證號已建檔＋生日吻合')，不吻合 → queue('生日不符')。
+
+測試：真值表逐格；特別含「有效證號但未建檔」「證號吻合但生日不符」「無卡但 pid=已建檔」
+三個關鍵 fail-closed 例，以及 `tests/test_provenance.py` 的跨圖湊吻合、後方多卡、病歷號重號三案。
 
 ## 9. archiver.py（T4）
 
 ```python
 file_record(conn, cfg, src_path, patient_key, taken_date, rtype, subtype, src, batch_key, actor='system') -> Path
 # archive/{patient_key}/{taken_date}_{rtype[-subtype]}_{seq:02d}{ext}；seq=該患者當日同型現有數+1
-# sha256 落 records；audit('auto_file'…)；os.replace 搬移；跨磁碟 fallback copy+fsync+unlink
+# 順序固定：先算 sha256（來源仍在）→ 搬移 → 才寫 records＋audit('auto_file')；
+# 搬移／雜湊失敗即清掉自己的 0 位元組佔位檔並往上拋，DB 不留半筆
 move_to_review(cfg, src_path) -> Path
+claimed_move(src, dest_dir) -> Path
 merge_patient(conn, cfg, from_key, to_key, actor)   # 資料夾檔案逐一搬併＋records 改 key＋audit('merge')
 rename_patient_key(conn, cfg, old_key, new_key, actor)  # P-碼補證號：資料夾更名＋records/patients 更新＋audit
+reconcile(conn, cfg) -> dict                        # 開機耐久性巡檢（main.bootstrap 呼叫）
 ```
-測試用 tmp_path 實體驗證：搬移原子性（來源消失、目的存在）、重名後綴、seq 遞增、merge 後 DB 一致。
+
+搬移與命名的不變量：
+
+- `_move(src, dest)`：同磁碟 `os.replace`；跨磁碟（`EXDEV`）fallback = copy＋fsync＋`os.replace`＋unlink。
+  `src` 可以是檔案或**目錄**（`rename_patient_key` 的整夾更名會傳目錄）：同磁碟時 `os.replace` 兩者都吃，
+  跨磁碟時目錄改走 `shutil.move`，且 `dest` 已存在即 `raise FileExistsError`——`shutil.move` 對已存在的
+  目錄是「搬進去」而非取代，會靜默產生 `archive/新key/舊key/` 巢狀結構。
+- `_replace_with_retry(src, dest)`：所有 `os.replace` 都走它。Windows 上 Defender／索引器短暫持有檔案
+  握把會丟 winerror 32（`ERROR_SHARING_VIOLATION`）、POSIX 上 NFS lock 可能丟 EACCES/EPERM——這類
+  **暫時性鎖檔**做有界重試（5 次，睡 0.3×n 秒遞增），仍失敗就拋最後一個例外並記 warning，**絕不無聲吞掉**
+  （fail-closed：呼叫端清佔位檔、不寫 DB，檔案留在原處等下一輪）。`EXDEV` 與其他錯誤一律立刻往外拋。
+- `_claim_destination(patient_dir, prefix, ext)`：`file_record` 的目的檔名**計算與宣告**必須在
+  模組級 `threading.Lock` 保護下、以 `os.open(O_CREAT|O_EXCL)` 原子佔位完成（雙保險）。
+  舊寫法「數檔案→組 seq→`.exists()` 檢查」三步之間有 TOCTOU 空隙，兩個執行緒會算出同一個 seq、
+  各自覺得目的不存在，後搬的靜默覆蓋先搬的＝**資料遺失**（壓測重現：12 併發只剩 2–4 檔）。
+  撞名時同一函式一次處理兩層碰撞：seq 往後遞增、seq 檔名本身也撞則 bump `-2`/`-3`。
+- `claimed_move(src, dest_dir)`：以**同一把鎖與同一套 O_EXCL 佔位**把檔案以原名搬進指定資料夾
+  （撞名 bump `-2`/`-3`，絕不覆蓋），供 `trash/` 等受控搬移共用（`webapp._move_to_trash`）。
+  先前 trash 走「`exists()` 檢查＋`os.replace`」兩步非原子，兩個並發刪卡可挑中同一個目的名互相覆蓋。
+- `merge_patient` 開頭先驗 `to_key` 存在於 patients，否則 `raise ValueError`：否則檔案會先被實際搬完，
+  之後的 `UPDATE records SET patient_key=?` 才因外鍵失敗，留下「records.path 指向已不存在的舊路徑」。
+
+`reconcile(conn, cfg)` — 開機耐久性巡檢，只回報、不臆測、不自動搬移或刪除，冪等（已被 open
+孤兒項涵蓋的路徑不重複建立）。**執行順序固定**：
+
+1. `archive/` 實體檔 vs `records.path` 雙向比對 → 前者多出來的掛
+   queue_item(kind='orphan', '歸檔區發現無索引檔案')；後者指向的檔案不在磁碟上則掛
+   '索引指向的檔案遺失'。
+2. **先退殭屍**：把 `state='resolved' AND resolution='processing'` 的認領全部退回 `open`
+   （開機時不可能有在途請求）。
+3. **再掃 review/**：`review/` 實體檔 vs **所有** open 佇列項 `payload.files` 聯集，無人認領者掛
+   '待確認區發現無主檔案'。
+   順序不可對調：殭屍項引用的檔案若在退回前先被掃成孤兒，退回後同一檔案會有兩個 open 項，
+   可被分別歸給不同病人（P0）。
+
+回傳計數 `{"archive_orphan_files", "archive_missing_records", "stale_processing_reverted",
+"review_orphan_files"}`，由 `main.bootstrap` 寫進 `integration.log`。
+
+測試用 tmp_path 實體驗證：搬移原子性（來源消失、目的存在）、重名後綴、seq 遞增、merge 後 DB 一致、
+併發 `file_record` 不覆寫（`tests/test_durability.py`）。
 
 ## 10. reports.py ＋ watcher.py ＋ main.py（T5）
 
-- `process_inbox(conn, cfg)`：掃 inbox 檔案（mtime 靜置 settle 秒）；副檔名不在白名單或 .pdf → move_to_review＋queue('PDF 需人工'/'格式不支援')；影像 → `ocr_image_text`→`extract_report_fields`→`decide_report`→ auto 則 `file_record`（taken_date=report_date or 檔案 mtime 日）／queue 則 move_to_review＋queue_item（payload 含 extracted 供 UI 顯示）。
-- `process_staging(conn, cfg)`：`scan_staging`→查 processed_batches 標遲到→逐組：對每張圖 `ocr_image_text`→收集 ids（`extract_ids` 過 checksum）＋`detect_card` 的圖記 card 候選＋card_dob（對 detect_card 的圖跑 `extract_report_fields().dob`）→`decide_photo_batch`→ auto：逐檔 `file_record(rtype='病灶照')`；detect_card 且批內檔數≥2 的圖改 rtype='識別影像' 並**另建 queue_item(kind='card_suspect')** 供管理者一鍵刪除（v0 不自動刪，README 註明與 docs 差異）／queue：整組 move_to_review＋queue_item→`mark_batch`。
-- `watcher_loop(cfg, stop_event)`：每 poll_seconds 跑兩個 process_*，例外 log 不中斷。
-- `main.py`：載 config→ensure_dirs→init_db→ensure_initial_admin→啟 watcher thread→uvicorn 起 webapp（同 process）；SIGINT 優雅停。
+- `process_inbox(conn, cfg, now=None)`：掃 inbox 檔案（mtime 靜置 `cfg.settle_seconds` 秒；dotfile 與非檔案略過）；
+  `.pdf` → move_to_review＋queue('PDF 需人工')；副檔名不在 `cfg.allowed_exts` → move_to_review＋queue('格式不支援')；
+  影像 → `ocr_image_text`→`extract_report_fields`→`decide_report`（**任何例外 fail-closed**：
+  queue('OCR 失敗需人工')）→ auto 則 `classify_report` 定 (rtype, subtype) 後 `file_record`
+  （taken_date = report_date or 檔案 mtime 日）／queue 則 move_to_review＋queue_item。
+  佇列 payload 的 `extracted` 由 `_fields_payload(fields)` 產生，**必須帶 rtype／subtype**
+  （與 ids／names／dob／chart_no／report_date／keywords 並列）：`webapp._filing_params` 對
+  report／straggler 是讀 `extracted.rtype/subtype` 決定歸檔型別的，少了這兩欄，經佇列人工歸檔的
+  檢驗報告會統一退化成「文件」，同一位病人的報告在自動與人工兩條路徑上分類不一致。
+- `process_staging(conn, cfg, now=None)`：查 `processed_batches` 取已處理鍵集合傳入
+  `scan_staging`（判遲到檔）→逐組：
+  - 可疑批（`suspect_reason` 非空）**免 OCR**直接交判準（避開對非影像垃圾檔硬解）；
+  - 其餘逐張 `ocr_image_text` 建 `ImageEvidence(path, ids=taiwan_id.extract_ids(text),
+    is_card=detect_card(text), dob=<僅 is_card 圖跑 extract_report_fields().dob>)`；
+    **生日只對卡圖抽取**，非卡圖的雜訊日期不採信（避免被拿去跨圖湊吻合）；OCR 例外 →
+    整組 queue('OCR 失敗需人工')；
+  - `decide_photo_batch(conn, group, images)` → auto：逐檔 `file_record(rtype='病灶照', subtype=None,
+    src='phone', batch_key=group.key)`／queue：整組 move_to_review＋queue_item
+    （kind：遲到檔→`straggler`，其餘→`photo_batch`）；兩條路徑最後都 `mark_batch`
+    （`auto_filed`／`queued`）以支援遲到檔偵測。
+- **card_suspect 語意（v0 實況）**：`architecture.md` 的 §5 之 5.8 與 §6 表格已同步記載本條——
+  「純卡片照用畢即刪」是未來的目標形態，不是 v0 行為。auto 分支中偵測到卡的圖**一律歸為 `病灶照`**（不自動標『識別影像』、
+  不自動刪除），並且**不論批內張數**（含單張純卡批）都另建
+  `queue_item(kind='card_suspect', reason='健保卡影像建議人工刪除')`，payload 帶
+  `{files:[歸檔後路徑], record_ids:[…], patient_key, batch_key}`，由管理者在佇列詳情頁二選一：
+  `card_keep`（卡＋病灶同框 N0，檔案與紀錄不動）或 `delete_card`（純卡片照移入 `trash/`，
+  可回收、非永久刪除）。
+- `watcher_loop(cfg, stop_event, poll_seconds=None)`：本執行緒**自開自的 sqlite 連線**
+  （連線不可跨執行緒共用，絕不與 web 端共用），每 `poll_seconds`（預設 `cfg.poll_seconds`，
+  測試可縮短）跑一輪 `run_once`＝兩個 process_*；單輪任何例外只記 log、不中斷迴圈。
+- `main.py`：`bootstrap()` = 載 config→ensure_dirs→**設定 log（必須最先，否則後面的統計沒有
+  handler 可寫）**→init_db→ensure_initial_admin→`archiver.reconcile()` 開機耐久性巡檢並把
+  孤兒統計寫進 log；`run()` 再啟 watcher thread→uvicorn 起 webapp（同 process）；
+  SIGINT/SIGTERM 優雅停，uvicorn 返回後一併收束 watcher。
 - `test_pipeline_e2e.py`：**monkeypatch ocr_image_text**（回預存文字，不需真引擎）；模擬 ClinicSnap 寫檔（同時間戳批、碰撞後綴批、無卡批）→跑一輪 process→斷言 archive/review/DB/queue 全符合預期。
 
 ## 11. webapp.py ＋ templates（T6）
@@ -228,6 +384,8 @@ POST /logout
 GET  /            → 佇列總覽（open queue_items 分 kind 列表）             viewer+
 GET  /queue/{id}  → 佇列詳情：縮圖（authenticated file route）、extracted 欄位、
                     動作表單（指定病人：搜尋既有/建新檔含 P-碼、確認歸檔、整批刪除〔僅 card_suspect〕） manager
+GET  /queue/{id}/file/{n} → 佇列縮圖：n 僅為 payload["files"] 索引（路徑非使用者可控），
+                    resolve 後須落在 data_root 之下；寫 audit('view_file')            manager
 POST /queue/{id}/resolve → 依表單執行：建/選 patient → file_record 逐檔 → resolve_queue_item → audit
 GET  /patients?q= → 病人搜尋（key/name/chart_no LIKE）                    viewer+
 GET  /p/{key}     → 時間軸：records 依日分組、縮圖、audit('view_timeline')  viewer+
@@ -237,11 +395,49 @@ GET  /users、POST /users → 建帳號                                        m
 GET  /audit       → 最近 500 筆                                          manager
 ```
 
-模板繁中、手機優先、無外部資源（自帶 <style>，風格樸素即可）；縮圖直接 <img> 原檔（v0 不做縮圖快取）。TestClient 測試：未登入 302、viewer 禁 manager 路由、queue resolve 全流程（用 tmp 環境＋假檔）、file 路由拒絕任意 path。
+**安全與交易一致性不變量（皆為已修補的 P0／P1，回歸測試在 `tests/test_webapp.py`、
+`tests/test_durability.py`；重構不得移除任何一條）**：
+
+- **CSRF**：每個 session 綁一枚 csrf token（`db.create_session` 配發、持久化於 `sessions.csrf`、
+  `current_user` 一併帶出）。GET 頁把它塞進表單 hidden 欄，**每個 POST 路由進入時**先以
+  `secrets.compare_digest` 比對（`_verify_csrf`；`/logout` 內含等價比對），不符即寫
+  audit('csrf_reject')＋回 403。`compare_digest` 對兩個空字串會回 True，故必須先確認
+  expected 與表單值皆非空再比。登入表單（尚無 session）是唯一例外。
+- **原子認領（防重放）**：真正改動狀態前先做一次
+  `UPDATE queue_items SET state='resolved', resolution='processing' WHERE id=? AND state='open'`；
+  `rowcount != 1` 代表已被別的請求認領 → 回「此項已被處理」友善 200 頁，**不做任何歸檔**。
+  輸入驗證刻意排在認領**之前**（驗不過就重填表單、不認領、佇列維持 open）；認領後任何一步失敗
+  一律 `_revert_claim_if_processing` 退回 open，不讓項目卡在 resolved/processing 永久消失。
+- **部分完成 write-ahead**：病人一建立／每歸一檔就立刻把進度寫進 `payload.partial`
+  （`{patient_key, filed:[…]}`），因為硬崩潰（斷電、kill -9）不會走 except handler，
+  `partial` 是唯一能告訴下一位操作者「已建了誰、歸了幾檔」的憑據。據此的閘門：
+  有 `partial.patient_key` → **封鎖 `new_id`／`new_pcode`**（避免建出第二位幽靈病人）；
+  `partial.filed` 非空 → 只准 `action='existing'` 且 `patient_key` **等於** `partial.patient_key`
+  （硬綁定續歸同一位）；`partial.patient_key` 指向的病人在 patients 表中查無（崩潰在 insert 之前）
+  → 該**幽靈意圖作廢**，不得把操作者鎖死在一個不存在的代號上；P 碼撞號時以哨兵值明確清除意圖。
+- **card_suspect 只准 `card_keep`／`delete_card`**：其 payload 指向**已歸檔**的檔案，走一般歸檔動作
+  會把 N0 搬進另一位病人資料夾、留下指向空路徑的原 record；反向亦然（非 card_suspect 項不得用
+  這兩個動作）。
+- **`_load_open_item` 只取 `state='open'`**：GET 詳情／縮圖對已 resolved 的項目一律 404，
+  不讓已歸檔項再被當可處理對象顯示。POST resolve 不走它，改由上述原子認領判定。
+- **受控送檔**：`/file/{record_id}` 只送 records 表登記的 path；該路由與 `/queue/{id}/file/{n}`
+  都必須 resolve 後確認落在 `data_root` 之下（防路徑穿越），且**兩者都寫 audit('view_file')**——
+  佇列縮圖同樣是病人影像的查閱行為，稽核範圍不得只涵蓋時間軸那一條路徑。
+- 歸檔前先驗檔案存在：缺檔記進 audit 與 UI 提示，其餘照歸，**不得靜默跳過**；
+  人工確認的紀錄在 `file_record` 之後補 `UPDATE records SET status='confirmed'`。
+
+模板繁中、手機優先、無外部資源（自帶 <style>，風格樸素即可）；縮圖直接 <img> 原檔（v0 不做縮圖快取）。TestClient 測試：未登入 302、viewer 禁 manager 路由、queue resolve 全流程（用 tmp 環境＋假檔）、file 路由拒絕任意 path、CSRF 缺漏／不符回 403、重放 resolve 只生效一次、部分完成後重試被導回「既有病人」。
 
 ## 12. contract_test.py ＋ README.md（T7）
 
-- `contract_test.py <staging_dir>`：對真實 ClinicSnap 輸出（或 `--simulate` 自產樣本）驗四契約：檔名 regex 全數可解析、同批共用時間戳、序號 1..N、碰撞後綴格式；另 `--config <ClinicSnap config.json>` 時比對 token 欄位存在。結尾自報 `CONTRACT: PASS|FAIL`＋逐條結果。
+- `contract_test.py <staging_dir>`：對真實 ClinicSnap 輸出（或 `--simulate` 自產樣本）驗四契約：
+  ① 所有檔名可被 `FILE_RE` 解析；② 同批（同資料夾＋同時間戳、無碰撞後綴）序號恰為 1..N 連續；
+  ③ 碰撞後綴可辨識且不出現不合理的 `-1`；④ staging 第一層只有病患代碼資料夾或 `_unsorted`
+  （落單根檔案、二層以上巢狀皆判 FAIL）。另 `--config <ClinicSnap config.json>` 時檢查
+  token/saveDir/archiveMode 欄位，**只印 WARN、不影響 CONTRACT 判定**（那是另一件事）。
+  結尾自報 `CONTRACT: PASS|FAIL`＋逐條結果；`--selftest` 供 CI 快速自我檢查。
+  注意契約④與 `batching.scan_staging` 的容忍度刻意不同：後者把落單根檔案當「無代碼批」
+  （pid=None）照常處理，契約④報 FAIL 是「上游輸出結構不合預期」的提示，不代表資料會遺失或歸錯人。
 - README：如何從原始碼跑（venv、pip、`python -m clinic_archive.main`）、config 說明、首次 admin 密碼位置、**誠實限制**（PDF 進佇列、卡片照人工刪、Windows 打包腳本未在本機驗證、無縮圖快取）、契約測試用法、與 ClinicSnap 的關係（資料夾介面、不 import）。
 
 ## 13. Done Criteria（每張工單）

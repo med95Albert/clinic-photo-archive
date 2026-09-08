@@ -1,0 +1,65 @@
+# requirements.lock — 整合層的相依鎖版檔（v0）
+#
+# 為什麼要鎖：pyproject.toml 的 dependencies 只寫套件名、不寫版本，每次
+# `pip install -e .` 都會抓當下最新版。診所是無人值守的正式環境，上游一個
+# 破壞性改版（fastapi/starlette/rapidocr 都有前科）就會讓歸檔停擺，而且
+# 「開發機能跑、診所不能跑」這種差異最難查。本檔把整組實際驗過的版本釘死。
+#
+# 產生方式（在已驗證通過全套測試的 venv 內）：
+#     .venv/bin/pip freeze | grep -v '^-e ' > requirements.lock
+# 已排除本套件自身的 `-e` 可編輯安裝行與 pip/setuptools/wheel。
+#
+# 部署安裝（Windows 診所機，見 deploy/AGENT_DEPLOY.md）：
+#     py -3.12 -m venv .venv
+#     .\.venv\Scripts\pip install -r requirements.lock
+#     .\.venv\Scripts\pip install -e . --no-deps
+#   ↑ 先裝鎖定版，再用 --no-deps 掛上本套件，pip 才不會回頭解相依把版本頂掉。
+#
+# 開發機（macOS／Linux）要更新鎖版時：升級套件 → 跑完 `pytest tests -q` 與
+# `contract_test.py --selftest` 全綠 → 才重新 freeze 覆蓋本檔。
+#
+# 注意：本檔是在 macOS／Python 3.14 產生的。onnxruntime、opencv-python、
+# shapely 等有平台輪子差異，Windows 上若某個版本無對應 wheel，請在該機重新
+# 產生本檔並記錄於部署文件，不要手改單行版本號。
+annotated-doc==0.0.4
+annotated-types==0.7.0
+antlr4-python3-runtime==4.9.3
+anyio==4.14.2
+certifi==2026.6.17
+charset-normalizer==3.4.9
+click==8.4.2
+colorlog==6.11.0
+fastapi==0.139.2
+flatbuffers==25.12.19
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.18
+iniconfig==2.3.0
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+numpy==2.5.1
+omegaconf==2.3.1
+onnxruntime==1.27.0
+opencv-python==5.0.0.93
+packaging==26.2
+pillow==12.3.0
+pluggy==1.6.0
+protobuf==7.35.1
+pyclipper==1.4.0
+pydantic==2.13.4
+pydantic_core==2.46.4
+Pygments==2.20.0
+pytest==9.1.1
+python-multipart==0.0.32
+PyYAML==6.0.3
+rapidocr==3.9.1
+requests==2.34.2
+shapely==2.1.2
+six==1.17.0
+starlette==1.3.1
+tqdm==4.69.0
+typing-inspection==0.4.2
+typing_extensions==4.16.0
+urllib3==2.7.0
+uvicorn==0.51.0

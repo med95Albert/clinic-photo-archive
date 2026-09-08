@@ -25,10 +25,24 @@
 
 ## 常用指令（integration/ 內）
 
+**Windows（PowerShell 5.1）**——注意 PS 5.1 **沒有 `&&`**（那是 PS7 語法，在 5.1 是語法錯誤），
+指令要分行或用 `;` 串接；且一律用 `py -3.12` 而非 `python`（Windows 的 `python.exe` 可能是
+「應用程式執行別名」存根，會跳 Microsoft Store 或建出壞掉的 venv）：
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\pip install -r requirements.lock ; .\.venv\Scripts\pip install -e . --no-deps
+.\.venv\Scripts\python -m pytest tests -q                          # 全套測試
+.\.venv\Scripts\python -m pytest tests\test_ocr_live.py -m e2e -q  # 真模型 OCR（首次下載模型）；skipped 視同失敗
+.\.venv\Scripts\python contract_test.py --selftest                 # ClinicSnap 行為契約
+.\.venv\Scripts\python run.py --config C:\ClinicArchive\config.json   # 啟動（不帶 --config 則 config 與 clinic_data 落在目前工作目錄）
 ```
-python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"   # Windows；macOS 用 .venv/bin/
-.venv/Scripts/python -m pytest tests -q                          # 全套測試
-.venv/Scripts/python -m pytest tests/test_ocr_live.py -m e2e -q  # 真模型 OCR（首次下載模型）
-.venv/Scripts/python contract_test.py --selftest                 # ClinicSnap 行為契約
-python run.py                                                    # 啟動（config 與 clinic_data 落在目前工作目錄）
+
+**macOS／Linux 開發機**：
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+.venv/bin/python -m pytest tests -q
+.venv/bin/python contract_test.py --selftest
+.venv/bin/python run.py                                            # config 與 clinic_data 落在目前工作目錄
 ```

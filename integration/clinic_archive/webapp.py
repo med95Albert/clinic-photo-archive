@@ -21,13 +21,10 @@ FastAPI ＋ jinja2 的地端管理介面：登入、佇列審核、病人時間�
 
 from __future__ import annotations
 
-import errno
 import json
 import logging
-import os
 import re
 import secrets
-import shutil
 import sqlite3
 from datetime import date
 from pathlib import Path
@@ -134,7 +131,8 @@ def _data_root(request: Request) -> Path:
 def _move_to_trash(cfg: Any, src: Path) -> Path:
     """把實體檔搬到 ``{data_root}/trash/``（保留原名、衝突加後綴、絕不覆蓋）。
 
-    同磁碟 ``os.replace``；跨磁碟 fallback = copy2＋unlink。不寫 DB（呼叫端負責）。
+    委派 ``archiver.claimed_move``（跨磁碟由 ``archiver._move`` 處理）。
+    不寫 DB（呼叫端負責）。
     """
     return archiver.claimed_move(src, Path(cfg.data_root) / "trash")
 
@@ -389,7 +387,12 @@ def queue_file(
     user=Depends(require_manager),
     conn=Depends(get_conn),
 ):
-    """佇列縮圖：只依 payload["files"] 的索引取檔，並確認落在 data_root 之下。"""
+    """佇列縮圖：只依 payload["files"] 的索引取檔，並確認落在 data_root 之下。
+
+    這條路徑會把病人影像送出瀏覽器，因此與 ``/file/{record_id}`` 一樣要寫 audit：
+    文件承諾「經系統介面的查閱都有紀錄」，佇列縮圖也是查閱。此時檔案尚未歸檔、
+    patient_key 未定（正是進佇列的原因），故只記 queue id 與索引。
+    """
     item = _load_open_item(conn, item_id)
     files = (json.loads(item["payload"]).get("files") or [])
     if not (0 <= index < len(files)):
@@ -399,6 +402,10 @@ def queue_file(
         raise HTTPException(status_code=403, detail="路徑越界")
     if not path.is_file():
         raise HTTPException(status_code=404, detail="檔案不存在")
+    db.add_audit(
+        conn, actor=user["username"], action="view_file",
+        detail=f"queue#{item_id} 第 {index} 檔",
+    )
     return FileResponse(str(path))
 
 

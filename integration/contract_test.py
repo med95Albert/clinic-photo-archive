@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """contract_test.py — 整合層與 ClinicSnap 之間的檔名／資料夾契約驗證工具（T7）。
 
-背景：`clinic_archive.batching`（architecture.md 第 5 節、SPEC.md 第 7 節）假設
+背景：`clinic_archive.batching`（architecture.md §5 第 7 條（批次還原機制）、SPEC.md 第 7 節）假設
 ClinicSnap（`archiveMode=by_patient`）輸出固定格式：
 
     staging/{病患代碼}/{YYYY-MM-DD}_{HHMMSS}_{idx}[-{碰撞後綴}].{ext}
@@ -137,7 +137,8 @@ def _check_filenames_parseable(walk: _Walk) -> ClauseResult:
 
 # ---------------------------------------------------------------------------
 # 共用：把單一資料夾內的檔案依 (date, time) 分組——分組鍵對齊 batching.py／
-# architecture.md §5.6 的定義（同一上傳請求共用同一時間戳）。只有契約 2、3 需要。
+# architecture.md §5 第 7 條（批次還原機制）的定義（同一上傳請求共用同一時間戳）。
+# 只有契約 2、3 需要。
 # ---------------------------------------------------------------------------
 
 
@@ -210,7 +211,7 @@ def _check_collision_suffix(walk: _Walk) -> ClauseResult:
                 if len(examples) < 5:
                     examples.append(f"{it.path.name}→idx={it.idx},coll={n}")
                 if n < 2:
-                    bad.append(f"{it.path.name} 的碰撞後綴={n}（上游慣例應 ≥2，不應出現 -1）")
+                    bad.append(f"{it.path.name} 的碰撞後綴={n}（上游慣例應 >=2，不應出現 -1）")
     passed = not bad
     evidence = [f"共發現 {total_collisions} 個碰撞後綴檔案。"]
     if examples:
@@ -445,6 +446,17 @@ def _run_selftest() -> None:
 
 
 def main() -> int:
+    # Windows 主控台預設 cp950：報告內含中文與各種標點，一旦輸出被重導向（`> out.txt`
+    # 或 CI 收集 log），cp950 編不出的字元會讓整支腳本以 UnicodeEncodeError 崩掉，
+    # 契約判定還沒印出來就死了。這裡先把 stdout/stderr 轉成 UTF-8，並用
+    # backslashreplace 當最後防線。舊 Python 或非 TextIO 的 stdout 沒有
+    # reconfigure，包 try/except 讓它安靜降級（報告內容本身已全部避開非 cp950 字元）。
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
     args = _parse_args(sys.argv[1:])
 
     if args.selftest:

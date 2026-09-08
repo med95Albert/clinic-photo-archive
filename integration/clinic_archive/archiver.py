@@ -17,7 +17,7 @@ fail-closed 相關不變量：
     不自動刪除（Fix-C：修復搬檔後崩潰＝孤兒檔）。
 
 ``cfg`` 以 duck-typing 讀取 ``cfg.data_root``（不硬 import T2 的 config.py）。
-DB 一律直接參數化 SQL（不依賴 T2 的 db.py DAO——db.py 目前由並行工單修改中）。
+DB 一律直接參數化 SQL（不依賴 db.py 的 DAO）。
 """
 
 from __future__ import annotations
@@ -25,13 +25,29 @@ from __future__ import annotations
 import errno
 import hashlib
 import json
+import logging
 import os
+import shutil
 import sqlite3
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 _CHUNK = 1 << 20  # 1 MiB
+
+# _move 對「暫時性鎖檔」的有界重試。Windows 上 Defender 即時掃描與搜尋索引器會
+# 短暫開著剛落地的檔案，此時 os.replace 會拋 PermissionError（winerror 32
+# ERROR_SHARING_VIOLATION）。這種鎖通常幾百毫秒內就放開，但 watcher 是輪詢迴圈：
+# 不重試就會每一輪重搬、重失敗、把 log 洗爆，而檔案永遠卡在 staging。
+# 有界（而非無限）重試：真正的權限問題仍要如實拋出，不能無聲吞掉。
+_MOVE_RETRY_ATTEMPTS = 5
+_MOVE_RETRY_BASE_SLEEP = 0.3  # 秒；第 n 次重試前睡 n * BASE（0.3/0.6/0.9/1.2）
+
+# Windows ERROR_SHARING_VIOLATION：檔案正被其他行程開著。
+_WINERROR_SHARING_VIOLATION = 32
 
 # file_record() 的「序號計算＋目的檔名宣告」臨界區鎖。單一 Python 行程內把整段
 # 「掃現有檔→算 seq→佔位」序列化；O_CREAT|O_EXCL 則是即使鎖涵蓋不到的呼叫路徑
@@ -73,22 +89,75 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _is_transient_lock_error(e: OSError) -> bool:
+    """這個 OSError 像不像「檔案被別人短暫開著」（值得重試）？
+
+    Windows：Defender／索引器持有檔案時是 winerror 32（ERROR_SHARING_VIOLATION）。
+    POSIX：EACCES／EPERM 也可能是暫時性（如 NFS lock），重試幾次無害。
+    """
+    if getattr(e, "winerror", None) == _WINERROR_SHARING_VIOLATION:
+        return True
+    return e.errno in (errno.EACCES, errno.EPERM)
+
+
+def _replace_with_retry(src: Path, dest: Path) -> None:
+    """``os.replace``，對暫時性鎖檔做有界重試。
+
+    EXDEV 與所有非鎖檔錯誤立即往外拋（EXDEV 由 ``_move`` 接手走跨磁碟 fallback）。
+    重試 ``_MOVE_RETRY_ATTEMPTS`` 次仍失敗就拋出最後一個例外——絕不無聲吞掉。
+    """
+    for attempt in range(1, _MOVE_RETRY_ATTEMPTS + 1):
+        try:
+            os.replace(src, dest)
+            return
+        except OSError as e:
+            if e.errno == errno.EXDEV or not _is_transient_lock_error(e):
+                raise
+            if attempt == _MOVE_RETRY_ATTEMPTS:
+                logger.warning(
+                    "搬移 %s → %s 連續 %d 次被鎖住，放棄重試：%s",
+                    src, dest, _MOVE_RETRY_ATTEMPTS, e,
+                )
+                raise
+            logger.debug(
+                "搬移 %s → %s 被鎖住（第 %d/%d 次），稍後重試：%s",
+                src, dest, attempt, _MOVE_RETRY_ATTEMPTS, e,
+            )
+            time.sleep(_MOVE_RETRY_BASE_SLEEP * attempt)
+
+
 def _move(src: Path, dest: Path) -> None:
-    """同磁碟 os.replace；跨磁碟 copy+fsync+unlink（原子性盡力而為）。"""
+    """同磁碟 os.replace；跨磁碟 copy+fsync+unlink（原子性盡力而為）。
+
+    ``src`` 可以是檔案或目錄（``rename_patient_key`` 的整夾更名會傳目錄）。
+    同磁碟時 ``os.replace`` 兩者都吃；跨磁碟時目錄必須改走 ``shutil.move``——
+    原本的 fallback 會 ``open(src, "rb")``，對目錄在 Linux 上拋 IsADirectoryError、
+    在 Windows 上拋 PermissionError（誤導成權限問題），等於整夾更名一旦跨磁碟就爆。
+    """
     try:
-        os.replace(src, dest)
+        _replace_with_retry(src, dest)
         return
     except OSError as e:
         if e.errno != errno.EXDEV:
             raise
+
     # 跨磁碟 fallback
+    if src.is_dir():
+        # shutil.move 在 dest 已存在且為目錄時會把 src「搬進去」而非取代它——
+        # 那會靜默產生 archive/新key/舊key/ 這種巢狀結構。呼叫端已保證 dest 不存在
+        # （rename_patient_key 只在 not new_dir.exists() 時走整夾更名），這裡再擋一次。
+        if dest.exists():
+            raise FileExistsError(f"跨磁碟整夾搬移的目的地已存在，拒絕合併：{dest}")
+        shutil.move(str(src), str(dest))
+        return
+
     tmp = dest.with_name(dest.name + ".part")
     with open(src, "rb") as r, open(tmp, "wb") as w:
         for chunk in iter(lambda: r.read(_CHUNK), b""):
             w.write(chunk)
         w.flush()
         os.fsync(w.fileno())
-    os.replace(tmp, dest)
+    _replace_with_retry(tmp, dest)
     os.unlink(src)
 
 

@@ -2,7 +2,7 @@
 
 `connect()` 只負責開連線＋設定 pragma；`init_db()` 執行 DDL（idempotent，
 可安全重複呼叫）。所有 DAO 一律 `(conn, …)` 簽名、一律參數化查詢，不做字串
-拼接 SQL。DDL 內容與 SPEC.md 第 3 節逐字一致。
+拼接 SQL。schema 以本檔為準，SPEC.md 第 3 節同步維護。
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import secrets
 import sqlite3
 from pathlib import Path
 
-# 與 SPEC.md 第 3 節逐字一致。
+# schema 以本檔為準，SPEC.md 第 3 節同步維護。
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS patients(
   patient_key TEXT PRIMARY KEY,        -- 身分證號 或 P-0000123
@@ -194,6 +194,12 @@ def insert_record(
     status: str = "auto",
     batch_key: str | None = None,
 ) -> int:
+    """新增一筆 records，回傳 rowid。
+
+    **非 production 主路徑**：production 走 ``archiver.file_record``（檔案宣告與
+    DB 寫入必須在同一個臨界區內完成，見該函式 docstring）。本 DAO 保留給測試與
+    未來的匯入工具使用——簽名即 records 表的欄位契約。
+    """
     cur = conn.execute(
         """
         INSERT INTO records(patient_key, taken_date, rtype, subtype, src, path, sha256, status, batch_key)
@@ -267,6 +273,12 @@ def open_queue_items(conn: sqlite3.Connection, kind: str | None = None) -> list[
 def resolve_queue_item(
     conn: sqlite3.Connection, item_id: int, resolution: str, resolved_by: str
 ) -> None:
+    """把佇列項目標成 resolved。
+
+    **非 production 主路徑**：production 走 webapp 的原子認領（帶
+    ``WHERE state = 'open'`` 的單句 UPDATE，避免兩位使用者同時處理同一項時
+    重複歸檔）。本 DAO 無狀態守衛，保留給測試與批次維護腳本使用。
+    """
     conn.execute(
         """
         UPDATE queue_items

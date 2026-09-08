@@ -3,6 +3,15 @@ name = "clinic-archive-integration"
 version = "0.1.0"
 description = "診所照片與檢驗報告歸檔整合層 v0"
 requires-python = ">=3.11"
+# 下列 dependencies 刻意不釘版本：它宣告的是「本套件需要什麼」，
+# 不是「診所那台機器上跑的是哪一版」。
+#
+# 正式環境（診所 Windows 伺服器）一律改用 requirements.lock 安裝：
+#     pip install -r requirements.lock
+#     pip install -e . --no-deps        ← --no-deps 才不會讓 pip 頂掉鎖定版
+#
+# requirements.lock 由驗證通過的 venv 以 `pip freeze` 產生，把整組實際跑過
+# 全套測試的版本釘死；更新流程與平台注意事項寫在該檔開頭的註解。
 dependencies = [
   "fastapi", "uvicorn", "jinja2", "python-multipart",
   "rapidocr", "onnxruntime", "pillow",

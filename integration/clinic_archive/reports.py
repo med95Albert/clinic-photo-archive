@@ -46,7 +46,15 @@ def _processed_keys(conn) -> set[str]:
 
 
 def _fields_payload(fields) -> dict:
-    """把 ReportFields 攤平成 JSON-safe dict（keywords set → 排序 list）供 UI 顯示。"""
+    """把 ReportFields 攤平成 JSON-safe dict（keywords set → 排序 list）供 UI 顯示。
+
+    連 ``classify_report`` 的 (rtype, subtype) 一起寫入：自動歸檔路徑會呼叫
+    classify_report 分類，但進佇列的路徑以前只存原始欄位，等人工 resolve 時
+    ``webapp._filing_params`` 讀不到 ``extracted.rtype`` 就一律退回「文件」——
+    同一份 CBC 報告，自動歸檔是「檢驗/CBC」、經佇列卻變「文件」，分類在人工
+    確認的當下反而流失了。分類結果在這裡就算好，兩條路徑才會一致。
+    """
+    rtype, subtype = extract.classify_report(fields.keywords)
     return {
         "ids": list(fields.ids),
         "names": list(fields.names),
@@ -54,6 +62,8 @@ def _fields_payload(fields) -> dict:
         "chart_no": fields.chart_no,
         "report_date": fields.report_date,
         "keywords": sorted(fields.keywords),
+        "rtype": rtype,
+        "subtype": subtype,
     }
 
 
@@ -134,7 +144,7 @@ def process_inbox(conn, cfg, now: float | None = None) -> dict:
 # staging：照片批
 # ---------------------------------------------------------------------------
 def _ocr_batch(cfg, group) -> list["predicate.ImageEvidence"]:
-    """對一組批次逐張 OCR，回傳每張圖的 ``ImageEvidence``（逐圖證據，不跨圖汇總）。
+    """對一組批次逐張 OCR，回傳每張圖的 ``ImageEvidence``（逐圖證據，不跨圖匯總）。
 
     證號用 taiwan_id.extract_ids 抽（checksum 由 predicate 套用）；健保卡以 detect_card
     偵測；卡面生日**只對 is_card 的圖**抽取（非卡圖的雜訊日期不採信，避免被拿去跨圖

@@ -23,19 +23,36 @@ _FONT_CANDIDATES = [
     "/System/Library/Fonts/STHeiti Light.ttc",
     "/System/Library/Fonts/Supplemental/Songti.ttc",
     "/Library/Fonts/Arial Unicode.ttf",
+    # Windows 繁中常見字型（微軟正黑、細明體、標楷體）
     "C:/Windows/Fonts/msjh.ttc",
+    "C:/Windows/Fonts/msjhbd.ttc",
+    "C:/Windows/Fonts/msjhl.ttc",
     "C:/Windows/Fonts/mingliu.ttc",
+    "C:/Windows/Fonts/mingliub.ttc",
+    "C:/Windows/Fonts/kaiu.ttf",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
 ]
 
 
 def _load_font(size: int):
+    """載入中文字型；找不到就 fail（不是 skip）。
+
+    這兩支是 OCR 的硬閘門測試。以前找不到字型時 `pytest.skip`，等於在沒有中文字型
+    的機器上（典型：精簡安裝的 Windows Server）讓整個閘門靜默通過——OCR 其實從沒
+    被驗過，卻顯示綠燈。改成 fail：要嘛裝繁中字型，要嘛把該機器的字型路徑補進
+    _FONT_CANDIDATES，不允許「因為驗不了所以算過」。
+    """
     for path in _FONT_CANDIDATES:
         try:
             return ImageFont.truetype(path, size)
         except OSError:
             continue
-    pytest.skip("找不到可用的中文字型，略過 OCR e2e")
+    pytest.fail(
+        "找不到中文字型："
+        + "、".join(_FONT_CANDIDATES)
+        + " 皆無法載入。OCR e2e 是硬閘門，不能因為缺字型就靜默跳過——"
+        "請安裝繁中字型或補 FONT_CANDIDATES。"
+    )
 
 
 def _make_card_like_image() -> bytes:

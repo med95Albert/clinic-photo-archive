@@ -7,9 +7,12 @@ initial admin 只建一次。
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 import stat
+import subprocess
+import sys
 
 import pytest
 
@@ -251,7 +254,7 @@ def test_batch_mark_and_state_round_trip(conn):
     db.mark_batch(conn, batch_key, "auto_filed")
     assert db.batch_state(conn, batch_key) == "auto_filed"
 
-    # 重複 mark 同一鍵（e.g. 遲到檔改標）應該更新狀態而非报錯。
+    # 重複 mark 同一鍵（e.g. 遲到檔改標）應該更新狀態而非報錯。
     db.mark_batch(conn, batch_key, "queued")
     assert db.batch_state(conn, batch_key) == "queued"
 
@@ -401,9 +404,6 @@ def test_ensure_initial_admin_creates_admin_once(tmp_path, conn):
     admin_file = data_root / "FIRST_RUN_ADMIN.txt"
     assert admin_file.exists()
 
-    mode = stat.S_IMODE(admin_file.stat().st_mode)
-    assert mode == 0o600
-
     content = admin_file.read_text(encoding="utf-8")
     match = re.search(r"密碼[:：]\s*(\S+)", content)
     assert match, content
@@ -425,6 +425,124 @@ def test_ensure_initial_admin_creates_admin_once(tmp_path, conn):
     assert count_after == 1
     assert admin_file.stat().st_mtime == mtime_before
     assert admin_file.read_text(encoding="utf-8") == content
+
+
+def test_first_run_admin_uses_icacls_on_windows(tmp_path, conn, monkeypatch, caplog):
+    """Windows 上必須改走 icacls 收緊 ACL，而不是無效的 os.chmod。
+
+    os.chmod 在 Windows 只能切唯讀旗標、對 ACL 完全是 no-op，密碼檔等於裸奔。
+    這裡假造 win32 平台驗證分支與參數；**icacls 本身無法在 macOS／Linux 驗證**，
+    真實 ACL 效果需在 Windows 上人工確認（見工單回報的已知限制）。
+    """
+    calls = []
+    monkeypatch.setattr(auth.sys, "platform", "win32")
+    monkeypatch.setenv("USERNAME", "clinicadmin")
+    monkeypatch.setattr(
+        auth.os, "chmod",
+        lambda *a, **k: pytest.fail("Windows 上不該呼叫 os.chmod（對 ACL 無效）"),
+    )
+
+    class _Proc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return _Proc()
+
+    monkeypatch.setattr(auth.subprocess, "run", fake_run)
+
+    data_root = tmp_path / "clinic_data"
+    data_root.mkdir()
+    with caplog.at_level(logging.WARNING, logger="clinic_archive.auth"):
+        auth.ensure_initial_admin(conn, data_root)
+
+    assert len(calls) == 1, "應剛好呼叫一次 icacls"
+    cmd, kwargs = calls[0]
+    admin_file = data_root / "FIRST_RUN_ADMIN.txt"
+    assert cmd[0] == "icacls"
+    assert cmd[1] == str(admin_file)
+    assert "/inheritance:r" in cmd          # 砍掉繼承來的寬鬆 ACE
+    assert "/grant:r" in cmd                # 取代而非疊加
+    assert "clinicadmin:R" in cmd           # 只留目前使用者唯讀
+    assert kwargs.get("timeout") == auth._ICACLS_TIMEOUT
+    assert kwargs.get("check") is False     # 失敗只警告，不得拋 CalledProcessError
+
+    # 必須明確警告「Windows 上此檔無完整權限保護，讀完立即刪除」。
+    assert any("讀完立即刪除" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        "nonzero",       # icacls 回非零（權限不足／非 NTFS）
+        "missing",       # icacls 根本不存在
+        "timeout",       # icacls 卡住
+    ],
+)
+def test_first_run_admin_survives_icacls_failure(tmp_path, conn, monkeypatch, outcome):
+    """icacls 失敗只記警告，絕不中斷首次啟動——收不緊權限也還是要能開機。"""
+    monkeypatch.setattr(auth.sys, "platform", "win32")
+    monkeypatch.setenv("USERNAME", "clinicadmin")
+
+    class _Proc:
+        returncode = 1
+        stdout = ""
+        stderr = "拒絕存取"
+
+    def fake_run(cmd, **kwargs):
+        if outcome == "missing":
+            raise FileNotFoundError("icacls not found")
+        if outcome == "timeout":
+            raise subprocess.TimeoutExpired(cmd, auth._ICACLS_TIMEOUT)
+        return _Proc()
+
+    monkeypatch.setattr(auth.subprocess, "run", fake_run)
+
+    data_root = tmp_path / "clinic_data"
+    data_root.mkdir()
+    auth.ensure_initial_admin(conn, data_root)   # 不得拋例外
+
+    # 帳號與密碼檔仍然正常產生。
+    admin_file = data_root / "FIRST_RUN_ADMIN.txt"
+    assert admin_file.exists()
+    assert db.get_user(conn, "admin") is not None
+
+
+def test_first_run_admin_skips_icacls_without_username(tmp_path, conn, monkeypatch):
+    """取不到 USERNAME 時不硬湊 icacls 參數（會授權給空字串），只警告後略過。"""
+    monkeypatch.setattr(auth.sys, "platform", "win32")
+    monkeypatch.delenv("USERNAME", raising=False)
+    monkeypatch.setattr(
+        auth.subprocess, "run",
+        lambda *a, **k: pytest.fail("沒有 USERNAME 就不該呼叫 icacls"),
+    )
+
+    data_root = tmp_path / "clinic_data"
+    data_root.mkdir()
+    auth.ensure_initial_admin(conn, data_root)   # 不得拋例外
+
+    assert (data_root / "FIRST_RUN_ADMIN.txt").exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows 無 POSIX 權限位元")
+def test_first_run_admin_file_is_owner_only(tmp_path, conn):
+    """密碼檔必須是 0o600（僅擁有者可讀寫）。
+
+    這條刻意獨立成一個測試並在 Windows 上 skip：NTFS 沒有 POSIX 權限位元，
+    `st_mode` 永遠回 0o666/0o444，斷言恆假。Windows 的權限收緊改由
+    `auth._restrict_file_permissions` 走 icacls（best-effort，見該函式 docstring），
+    無法用 stat 驗證。
+    """
+    data_root = tmp_path / "clinic_data"
+    data_root.mkdir()
+
+    auth.ensure_initial_admin(conn, data_root)
+
+    admin_file = data_root / "FIRST_RUN_ADMIN.txt"
+    mode = stat.S_IMODE(admin_file.stat().st_mode)
+    assert mode == 0o600
 
 
 def test_ensure_initial_admin_skips_when_users_already_exist(tmp_path, conn):

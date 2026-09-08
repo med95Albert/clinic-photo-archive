@@ -24,11 +24,12 @@ from __future__ import annotations
 import dataclasses
 import json
 import threading
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from clinic_archive import archiver, auth, config, db, webapp
+from clinic_archive import archiver, auth, config, db, ocr, reports, webapp
 
 # 已知通過內政部檢查碼的身分證號（A=10，加權和 130 ≡ 0 mod 10）。
 VALID_ID = "A123456789"
@@ -238,6 +239,62 @@ def test_viewer_can_view_overview_and_patients(env):
 # ---------------------------------------------------------------------------
 
 
+def test_queued_report_keeps_classification_through_manual_resolve(env, monkeypatch):
+    """報告進佇列 → 人工 resolve → rtype 仍是「檢驗」、subtype 保留。
+
+    迴歸：`reports._fields_payload` 以前不寫 rtype/subtype，`webapp._filing_params`
+    讀不到就退回「文件」。結果同一份 CBC 報告，自動歸檔是「檢驗/CBC」，經佇列人工
+    確認卻變成「文件」——分類在人工確認的當下反而流失。這條 e2e 走完整條路徑：
+    真的 process_inbox 產生 payload、真的 webapp resolve 歸檔，兩端都不造假。
+    """
+    report_text = (
+        "檢驗報告\n姓名 林小華\n"
+        f"{VALID_ID}\n出生 2015-05-05\n報告日期 2026-07-11\nCBC 白血球 血紅素"
+    )
+    inbox_file = env.data_root / "inbox" / "report.jpg"
+    inbox_file.parent.mkdir(parents=True, exist_ok=True)
+    inbox_file.write_text(report_text, encoding="utf-8")
+
+    # 免真 OCR 引擎：直接把檔案文字當作 OCR 逐行結果。
+    monkeypatch.setattr(
+        ocr, "ocr_image_text",
+        lambda path_or_bytes, cfg: Path(path_or_bytes).read_text(encoding="utf-8"),
+    )
+    cfg = dataclasses.replace(env.cfg, settle_seconds=0)
+
+    conn = _conn(env)
+    counts = reports.process_inbox(conn, cfg)
+    conn.close()
+    # VALID_ID 尚未建檔 → 首見證號 → 進佇列（正是分類會流失的那條路徑）。
+    assert counts["queued"] == 1 and counts["auto"] == 0
+
+    conn = _conn(env)
+    item = conn.execute("SELECT id, payload FROM queue_items").fetchone()
+    conn.close()
+    # payload 必須已帶分類，人工 resolve 才有東西可用。
+    payload = json.loads(item["payload"])
+    assert payload["extracted"]["rtype"] == "檢驗"
+    assert payload["extracted"]["subtype"] == "CBC"
+
+    client = _login(env.app, "boss", "boss-pw")
+    resp = _post(
+        env, client, f"/queue/{item['id']}/resolve",
+        {"action": "new_id", "patient_id": VALID_ID, "name": "林小華", "dob": "2015-05-05"},
+    )
+    assert resp.status_code == 303, resp.text
+
+    conn = _conn(env)
+    records = db.records_for_patient(conn, VALID_ID)
+    conn.close()
+    assert len(records) == 1
+    rec = records[0]
+    assert rec["rtype"] == "檢驗", "經佇列人工歸檔的檢驗報告不該退化成「文件」"
+    assert rec["subtype"] == "CBC"
+    assert rec["src"] == "inbox"
+    # 檔名也應反映分類（archiver 以 rtype-subtype 命名）。
+    assert "檢驗-CBC" in Path(rec["path"]).name
+
+
 def test_manager_resolve_photo_batch_full_flow(env):
     review_file = _fake_image(env.data_root / "review" / "photo.jpg")
     item_id = _add_queue(
@@ -387,6 +444,44 @@ def test_queue_thumbnail_confined_to_payload_index(env):
 
     # 索引超出範圍 → 404（無法用來讀任意檔）。
     assert client.get(f"/queue/{item_id}/file/9").status_code == 404
+
+
+def test_queue_thumbnail_is_audited(env):
+    """佇列縮圖＝查閱病人影像，必須寫 audit。
+
+    文件承諾「經系統介面的查閱都有紀錄」。/file/{record_id} 一直有寫，
+    /queue/{id}/file/{n} 卻沒有——等於歸檔前的影像可以被看光而稽核表一片空白。
+    """
+    review_file = _fake_image(env.data_root / "review" / "audited.jpg")
+    item_id = _add_queue(env, "photo_batch", "首見證號", [review_file])
+
+    client = _login(env.app, "boss", "boss-pw")
+    assert client.get(f"/queue/{item_id}/file/0").status_code == 200
+
+    conn = _conn(env)
+    row = conn.execute(
+        "SELECT * FROM audit WHERE action='view_file' AND actor='boss'"
+    ).fetchone()
+    conn.close()
+    assert row is not None, "佇列縮圖查閱未留下 audit"
+    assert f"queue#{item_id}" in row["detail"]
+    assert "第 0 檔" in row["detail"]
+
+
+def test_queue_thumbnail_rejected_requests_are_not_audited(env):
+    """只有真正送出檔案才記查閱；404／403 不該灌水稽核表。"""
+    review_file = _fake_image(env.data_root / "review" / "notaudited.jpg")
+    item_id = _add_queue(env, "photo_batch", "首見證號", [review_file])
+
+    client = _login(env.app, "boss", "boss-pw")
+    assert client.get(f"/queue/{item_id}/file/9").status_code == 404
+
+    conn = _conn(env)
+    n = conn.execute(
+        "SELECT COUNT(*) AS n FROM audit WHERE action='view_file'"
+    ).fetchone()["n"]
+    conn.close()
+    assert n == 0
 
 
 # ---------------------------------------------------------------------------

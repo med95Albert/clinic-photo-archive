@@ -1,4 +1,4 @@
-"""批次還原（architecture.md §5.6）——確定性 fail-closed 規則。
+"""批次還原（architecture.md §5 第 7 條（批次還原機制））——確定性 fail-closed 規則。
 
 ClinicSnap 逐檔寫入、無批次 manifest。整合層以檔名特性重組批次，並用
 「序號連續性」與「碰撞後綴」作為**確定性**的混批證據：寧可進佇列，絕不誤併。
@@ -55,7 +55,8 @@ def scan_staging(
     now:
         判定當下的 epoch 秒（預設 ``time.time()``）；用於靜置窗計算，測試可注入。
     settle_seconds:
-        靜置窗（architecture §5.6 預設 10）。組內最新 mtime 距 ``now`` 未滿此秒數 →
+        靜置窗（architecture §5 第 7 條（批次還原機制）預設 10）。組內最新 mtime
+        距 ``now`` 未滿此秒數 →
         本輪跳過（不回傳），避免處理寫入中的半批。
     processed_keys:
         已處理批次鍵集合（呼叫端查 ``processed_batches`` 後傳入）。鍵已存在 →

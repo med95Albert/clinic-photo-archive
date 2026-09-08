@@ -307,5 +307,126 @@ def test_rename_patient_key_merge_into_existing(conn, cfg, tmp_path):
     assert all(Path(r[1]).exists() for r in rows)
 
 
+# ---- _move：跨磁碟目錄搬移 -------------------------------------------------
+def test_move_dir_cross_device_uses_shutil_not_open(tmp_path, monkeypatch):
+    """整夾更名遇到跨磁碟時必須走 shutil.move。
+
+    舊 fallback 是 copy+fsync+unlink，會對目錄 ``open(src, "rb")``——Linux 拋
+    IsADirectoryError、Windows 拋 PermissionError。rename_patient_key 的整夾更名
+    傳的正是目錄，所以 archive/ 一旦跨磁碟，P-碼補證號就整個爆掉。
+    """
+    src_dir = tmp_path / "P-0000001"
+    src_dir.mkdir()
+    (src_dir / "a.jpg").write_bytes(b"aa")
+    (src_dir / "b.jpg").write_bytes(b"bb")
+    dest_dir = tmp_path / "A123456789"
+
+    def fake_replace(a, b):
+        raise OSError(errno.EXDEV, "cross-device")
+
+    monkeypatch.setattr(archiver.os, "replace", fake_replace)
+    archiver._move(src_dir, dest_dir)
+
+    assert not src_dir.exists()
+    assert (dest_dir / "a.jpg").read_bytes() == b"aa"
+    assert (dest_dir / "b.jpg").read_bytes() == b"bb"
+
+
+def test_move_dir_cross_device_refuses_existing_dest(tmp_path, monkeypatch):
+    """跨磁碟整夾搬移不得把 src 塞進既有的 dest（會產生巢狀 archive/新/舊/）。"""
+    src_dir = tmp_path / "P-0000001"
+    src_dir.mkdir()
+    (src_dir / "a.jpg").write_bytes(b"aa")
+    dest_dir = tmp_path / "A123456789"
+    dest_dir.mkdir()
+
+    monkeypatch.setattr(
+        archiver.os, "replace",
+        lambda a, b: (_ for _ in ()).throw(OSError(errno.EXDEV, "cross-device")),
+    )
+    with pytest.raises(FileExistsError):
+        archiver._move(src_dir, dest_dir)
+
+    assert (src_dir / "a.jpg").exists()          # 來源原封不動
+    assert not (dest_dir / "P-0000001").exists()  # 沒有搬出巢狀結構
+
+
+# ---- _move：Windows 鎖檔的有界重試 ----------------------------------------
+def test_move_retries_transient_permission_error(tmp_path, monkeypatch):
+    """Defender／索引器短暫鎖檔（winerror 32）→ 重試後成功，不該直接拋。"""
+    src = tmp_path / "src.jpg"
+    src.write_bytes(b"payload")
+    dest = tmp_path / "dest.jpg"
+
+    real_replace = os.replace
+    calls = {"n": 0}
+
+    def flaky_replace(a, b):
+        calls["n"] += 1
+        if calls["n"] <= 3:                       # 前 3 次佯裝被鎖住
+            err = PermissionError(errno.EACCES, "被 Defender 鎖住")
+            err.winerror = 32                     # ERROR_SHARING_VIOLATION
+            raise err
+        return real_replace(a, b)
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(archiver.os, "replace", flaky_replace)
+    monkeypatch.setattr(archiver.time, "sleep", sleeps.append)
+
+    archiver._move(src, dest)
+
+    assert calls["n"] == 4
+    assert dest.read_bytes() == b"payload"
+    assert not src.exists()
+    assert sleeps == pytest.approx([0.3, 0.6, 0.9])   # 漸增，且有界
+
+
+def test_move_gives_up_after_bounded_retries(tmp_path, monkeypatch):
+    """一直鎖著就要如實拋出——有界重試，絕不無限重試也絕不無聲吞掉。"""
+    src = tmp_path / "src.jpg"
+    src.write_bytes(b"payload")
+    dest = tmp_path / "dest.jpg"
+
+    calls = {"n": 0}
+
+    def always_locked(a, b):
+        calls["n"] += 1
+        err = PermissionError(errno.EACCES, "永遠被鎖住")
+        err.winerror = 32
+        raise err
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(archiver.os, "replace", always_locked)
+    monkeypatch.setattr(archiver.time, "sleep", sleeps.append)
+
+    with pytest.raises(PermissionError):
+        archiver._move(src, dest)
+
+    assert calls["n"] == archiver._MOVE_RETRY_ATTEMPTS   # 有界
+    assert len(sleeps) == archiver._MOVE_RETRY_ATTEMPTS - 1
+    assert src.exists()                                   # 失敗時來源保留
+
+
+def test_move_does_not_retry_non_lock_errors(tmp_path, monkeypatch):
+    """非鎖檔的 OSError（如 ENOENT）要立刻拋，不能浪費 5 輪重試。"""
+    src = tmp_path / "src.jpg"
+    src.write_bytes(b"payload")
+    dest = tmp_path / "dest.jpg"
+
+    calls = {"n": 0}
+
+    def enoent(a, b):
+        calls["n"] += 1
+        raise OSError(errno.ENOENT, "no such file")
+
+    monkeypatch.setattr(archiver.os, "replace", enoent)
+    monkeypatch.setattr(archiver.time, "sleep", lambda s: pytest.fail("不該睡"))
+
+    with pytest.raises(OSError):
+        archiver._move(src, dest)
+
+    assert calls["n"] == 1
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
