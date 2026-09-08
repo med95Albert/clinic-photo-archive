@@ -76,7 +76,7 @@ python run.py
   `python run.py --set-password admin`（提示輸入、不回顯、不啟動服務）。
 - **log 淨化**：`integration.log` 與主控台輸出一律經 `clinic_archive/redact.py`：證號遮成
   `A12345****`、暫時代號 `P-123****`；工作資料夾（inbox/review/trash/staging/archive）底下
-  非系統產生的檔名（可能含姓名）換成 `h<雜湊>.jpg`，traceback 裡的路徑也一樣；網址 query 值
+  非系統產生的檔名（可能含姓名）換成 `h<雜湊>.jpg`（系統檔名用精確樣式判定；引號內路徑可含空白；未加引號又含人取檔名的路徑會從該處遮到行尾），traceback 裡的路徑也一樣；網址 query 值
   一律 `<redacted>`。uvicorn 存取 log 整個關閉（誰看了什麼由稽核表負責）。
   要讀任何 log（含 ClinicSnap 的 `clinic_snap.log`）請一律經淨化器：
   `python -m clinic_archive.redact <log 路徑> --tail 200`。淨化器認得的是結構化識別碼、

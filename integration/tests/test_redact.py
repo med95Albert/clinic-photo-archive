@@ -71,12 +71,48 @@ def test_masking_formatter_masks_args_and_exception_text():
         # uvicorn 存取 log 格式：query 值一律 <redacted>（病人搜尋字串＝姓名）
         ('127.0.0.1:50000 - "GET /patients?q=%E7%8E%8B%E5%B0%8F%E6%98%8E HTTP/1.1" 200', "%E7%8E%8B", "q=<redacted>"),
         ("GET /p/A123456789?tab=x&q=王小明", "王小明", "/p/A12345****?tab=<redacted>&q=<redacted>"),
+        # R3：日期開頭但含中文的使用者檔名不得因 \w 放行
+        ("inbox/2026-09-09_王小明.jpg", "王小明", "inbox/h"),
+        # R3：未加引號＋檔名含空白 → 邊界不可判定，從路徑起遮到行尾
+        ("failed inbox/report 王小明.jpg then more", "王小明", "failed inbox/h"),
+        # R3：引號內含空白的檔名整段淨化，引號後文保留
+        ("cannot identify image file '/srv/clinic_data/inbox/report 王小明.jpg' at all", "王小明", ".jpg' at all"),
+        # R3：Python repr 的 Windows 路徑（雙反斜線）在引號內
+        ("[Errno 2] No such file: 'C:\\\\ClinicArchive\\\\clinic_data\\\\inbox\\\\王小明.jpg'", "王小明", "inbox\\\\h"),
+        # 中文緊貼工作資料夾名
+        ("收件夾inbox/王小明.jpg", "王小明", "inbox/h"),
+        # 歸檔檔名（含中文 rtype 詞彙）是系統產生的，保留
+        ("archive/A123456789/2026-07-18_病灶照_01.jpg", "A123456789", "archive/A12345****/2026-07-18_病灶照_01.jpg"),
+        ("archive/A123456789/2026-07-18_檢驗-CBC_01-2.png", "****/h", "A12345****/2026-07-18_檢驗-CBC_01-2.png"),
     ],
 )
 def test_mask_text_paths_and_queries(raw, must_not_contain, must_contain):
     out = redact.mask_text(raw)
     assert must_not_contain not in out, out
     assert must_contain in out, out
+
+
+def test_unquoted_arbitrary_path_redacts_to_end_of_line_but_safe_paths_keep_tail():
+    # 全部段都是系統名 → 邊界確定，後文保留（archiver 搬檔訊息就是這種形狀）
+    ok = redact.mask_text("搬移 staging/A123456789/2026-07-18_101530_1.jpg → archive/A123456789/2026-07-18_病灶照_01.jpg 連續 3 次被鎖住")
+    assert ok.endswith("連續 3 次被鎖住") and "A123456789" not in ok
+    # 含使用者取名 → 遮到行尾；下一行不受影響
+    out = redact.mask_text("第一行 review/王 小明 報告.jpg → archive/x 後文\n第二行 沒有路徑")
+    first, second = out.split("\n")
+    assert first.startswith("第一行 review/h") and first.endswith("<redacted>") and "小明" not in first
+    assert second == "第二行 沒有路徑"
+    # 冪等：淨化過的再淨化不變
+    assert redact.mask_text(ok) == ok and redact.mask_text(out) == out
+
+
+def test_masking_formatter_windows_style_exception_repr():
+    fmt = redact.MaskingFormatter("%(message)s")
+    try:
+        raise FileNotFoundError(2, "No such file or directory", r"C:\ClinicArchive\clinic_data\inbox\王小明 報告.jpg")
+    except FileNotFoundError:
+        rec = logging.LogRecord("t", logging.ERROR, __file__, 1, "inbox 失敗", (), sys.exc_info())
+    out = fmt.format(rec)
+    assert "王小明" not in out and "inbox" in out
 
 
 def test_mask_text_path_hash_is_stable_and_keeps_suffix():
@@ -88,6 +124,9 @@ def test_mask_text_path_hash_is_stable_and_keeps_suffix():
 
 def test_mask_segment_bare_names():
     assert redact.mask_segment("2026-07-18_101530_1.jpg") == "2026-07-18_101530_1.jpg"
+    assert redact.mask_segment("2026-07-18_病灶照_01.jpg") == "2026-07-18_病灶照_01.jpg"
+    assert redact.mask_segment("2026-09-09_王小明.jpg").startswith("h")      # 日期開頭的人取名仍雜湊
+    assert redact.mask_segment(redact.mask_segment("王小明.jpg")) == redact.mask_segment("王小明.jpg")  # 冪等
     assert redact.mask_segment("_unsorted") == "_unsorted"
     assert redact.mask_segment("A123456789") == "A12345****"
     out = redact.mask_segment("王小明.jpg")
