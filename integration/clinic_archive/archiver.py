@@ -116,15 +116,16 @@ def _replace_with_retry(src: Path, dest: Path) -> None:
             if e.errno == errno.EXDEV or not _is_transient_lock_error(e):
                 raise
             if attempt == _MOVE_RETRY_ATTEMPTS:
+                # 路徑用 mask_path 淨化並以引號標明邊界（redact 規則：未加引號路徑會被遮到行尾）。
                 logger.warning(
-                    "搬移 %s → %s 連續 %d 次被鎖住，放棄重試：%s",
-                    redact.mask_text(str(src)), redact.mask_text(str(dest)),
+                    "搬移 '%s' → '%s' 連續 %d 次被鎖住，放棄重試：%s",
+                    redact.mask_path(src), redact.mask_path(dest),
                     _MOVE_RETRY_ATTEMPTS, e,
                 )
                 raise
             logger.debug(
-                "搬移 %s → %s 被鎖住（第 %d/%d 次），稍後重試：%s",
-                redact.mask_text(str(src)), redact.mask_text(str(dest)),
+                "搬移 '%s' → '%s' 被鎖住（第 %d/%d 次），稍後重試：%s",
+                redact.mask_path(src), redact.mask_path(dest),
                 attempt, _MOVE_RETRY_ATTEMPTS, e,
             )
             time.sleep(_MOVE_RETRY_BASE_SLEEP * attempt)
