@@ -68,3 +68,5 @@ python3 -m venv .venv
 本 repo 不含任何病人資料、不含診所內部帳號或金鑰。說明文件與示意圖中的身分證字號一律以後四碼遮罩（如 `A12345****`）呈現；`integration/` 的測試程式碼中出現的完整證號（如 `A123456789`）均為檢查碼演算法測試所需的公開慣用合成號碼，或於執行期隨機生成，非指涉任何真實個人。
 
 <!-- cross-model-reviewed: 2026-07-18T15:58:13Z rounds=5 verdict=approved reviewer=codex:gpt-5.6-sol sha=76c4d5123f6956cd -->
+
+<!-- cross-model-reviewed: 2026-09-09T16:43:44Z rounds=5 verdict=approved reviewer=codex:gpt-6-astra sha=e27e686ba4550cde -->
